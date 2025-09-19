@@ -116,6 +116,8 @@ def extract_discrepancies(verified: Iterable[Dict[str, Any]]) -> List[Dict[str, 
     discrepancies: List[Dict[str, Any]] = []
     for row in verified:
         delta = row.get("discrepancy_bps", 0)
+        if row.get("verification") == "aggregator_only":
+            continue
         if delta:
             discrepancies.append(
                 {

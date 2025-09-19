@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+import unicodedata
 from dataclasses import dataclass
 from typing import Any, Dict, List
 
@@ -13,36 +14,60 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 logger = logging.getLogger(__name__)
 
 try:
-    from crawl4ai import AsyncCrawler, BrowserConfig
+    from crawl4ai import AsyncWebCrawler, BrowserConfig
 except ImportError:  # pragma: no cover - optional dependency at runtime
-    AsyncCrawler = None  # type: ignore
-    BrowserConfig = None  # type: ignore
+    AsyncWebCrawler = None  # type: ignore[attr-defined]
+    BrowserConfig = None  # type: ignore[attr-defined]
 
 AGGREGATOR_URL = "https://www.nerdwallet.com/best/banking/high-yield-online-savings-accounts"
 USER_AGENT = "Mozilla/5.0 (compatible; HYSA-Pipeline/1.0; +https://github.com/<me>/<my-hysa-poc>)"
+APY_PATTERN = re.compile(r"(?:APY\s*(?P<rate1>\d+\.\d+)%)|(?P<rate2>\d+\.\d+)\s*%", re.IGNORECASE)
 
-FALLBACK_BANKS = [
-    {
+
+def canonicalize(label: str) -> str:
+    """Create a lowercase canonical key for matching bank/product names."""
+    normalized = unicodedata.normalize("NFKD", label)
+    cleaned = "".join(ch for ch in normalized if ch.isalnum() or ch.isspace())
+    return re.sub(r"\s+", " ", cleaned).strip().lower()
+
+
+BANK_OVERRIDES: Dict[str, Dict[str, str]] = {
+    canonicalize("UFB Portfolio Savings"): {"bank": "UFB Direct", "product": "Portfolio Savings"},
+    canonicalize("Openbank High Yield Savings"): {"bank": "Openbank", "product": "High Yield Savings"},
+    canonicalize("Forbright Bank Growth Savings"): {"bank": "Forbright Bank", "product": "Growth Savings"},
+    canonicalize("Discover Online Savings"): {"bank": "Discover Bank", "product": "Online Savings"},
+    canonicalize("Synchrony Bank High Yield Savings"): {"bank": "Synchrony Bank", "product": "High Yield Savings"},
+    canonicalize("Western Alliance Bank High-Yield Savings - Powered by Raisin"): {
+        "bank": "Western Alliance Bank",
+        "product": "High-Yield Savings (Raisin)",
+    },
+    canonicalize("Capital One 360 Performance Savings"): {"bank": "Capital One", "product": "360 Performance Savings"},
+    canonicalize("LendingClub LevelUp Savings"): {"bank": "LendingClub", "product": "LevelUp Savings"},
+    canonicalize("Barclays Tiered Savings Account"): {"bank": "Barclays", "product": "Tiered Savings"},
+    canonicalize("Axos ONE Savings"): {"bank": "Axos Bank", "product": "ONE Savings"},
+    canonicalize("American Express High Yield Savings Account"): {
         "bank": "American Express",
-        "product": "High Yield Savings",
-        "apy": 4.35,
-        "aggregator_url": AGGREGATOR_URL,
-        "notes": "Flat rate; no minimum balance; fallback seed",
+        "product": "High Yield Savings Account",
     },
-    {
-        "bank": "Ally Bank",
+    canonicalize("CIT Bank Platinum Savings"): {"bank": "CIT Bank", "product": "Platinum Savings"},
+    canonicalize("Marcus by Goldman Sachs Online Savings Account"): {
+        "bank": "Marcus by Goldman Sachs",
         "product": "Online Savings Account",
-        "apy": 4.35,
-        "aggregator_url": AGGREGATOR_URL,
-        "notes": "Highly rated HYSA; fallback seed",
     },
+    canonicalize("SoFi Checking and Savings"): {"bank": "SoFi", "product": "Checking and Savings"},
+    canonicalize("E*TRADE Premium Savings"): {"bank": "E*TRADE", "product": "Premium Savings"},
+}
+
+FALLBACK_BANKS: List[Dict[str, Any]] = [
     {
-        "bank": "Capital One",
-        "product": "360 Performance Savings",
-        "apy": 4.35,
+        "bank": override["bank"],
+        "product": override["product"],
+        "apy": 4.0,
         "aggregator_url": AGGREGATOR_URL,
-        "notes": "National product; fallback seed",
-    },
+        "notes": "Fallback seed entry",
+        "canonical": key,
+    }
+    for key, override in BANK_OVERRIDES.items()
 ]
 
 
@@ -52,23 +77,25 @@ class CompetitorRow:
     product: str
     apy: float
     aggregator_url: str
+    canonical: str
     notes: str | None = None
 
     def as_dict(self) -> Dict[str, Any]:
         return {
             "bank": self.bank,
             "product": self.product,
-            "apy": self.apy,
+            "apy": round(self.apy, 4),
             "aggregator_url": self.aggregator_url,
             "notes": self.notes or "",
+            "canonical": self.canonical,
         }
 
 
 async def _fetch_with_crawl4ai(url: str) -> str:
-    if AsyncCrawler is None:
-        raise RuntimeError("crawl4ai not installed")
+    if AsyncWebCrawler is None:
+        raise RuntimeError("crawl4ai is not available")
     cfg = BrowserConfig(headless=True, java_script_enabled=True, user_agent=USER_AGENT)
-    async with AsyncCrawler(config=cfg) as crawler:
+    async with AsyncWebCrawler(config=cfg) as crawler:
         result = await crawler.arun(url=url)
     html = getattr(result, "html", None) or getattr(result, "content", "")
     if not html:
@@ -91,39 +118,46 @@ def _load_html(url: str) -> str:
         return _fetch_with_requests(url)
 
 
-HYSA_APY_PATTERN = re.compile(r"(?P<rate>\d+\.\d+)\s*%\s*APY", re.IGNORECASE)
-
-
-def _parse_table(html: str) -> List[CompetitorRow]:
+def _parse_cards(html: str) -> List[CompetitorRow]:
     soup = BeautifulSoup(html, "lxml")
     rows: List[CompetitorRow] = []
+    seen: set[str] = set()
 
-    def harvest_cards(elements: List[Any]) -> None:
-        for element in elements:
-            text = element.get_text(separator=" ", strip=True)
-            match = HYSA_APY_PATTERN.search(text)
-            if not match:
-                continue
-            title = element.find(["h2", "h3", "h4"])
-            bank_name = (title.get_text(strip=True) if title else element.get("aria-label", "")).strip()
-            if not bank_name:
-                continue
-            paragraph = element.find("p")
-            notes = paragraph.get_text(strip=True) if paragraph else None
-            apy = float(match.group("rate"))
-            rows.append(
-                CompetitorRow(
-                    bank=bank_name,
-                    product="High Yield Savings",
-                    apy=apy,
-                    aggregator_url=AGGREGATOR_URL,
-                    notes=notes,
-                )
+    for card in soup.select("[data-testid='product-card']"):
+        title_el = card.select_one("a[class*='boxHeadline']")
+        if not title_el:
+            continue
+        raw_name = title_el.get_text(strip=True)
+        canonical_name = canonicalize(raw_name)
+        override = BANK_OVERRIDES.get(canonical_name)
+        bank_name = override["bank"] if override else raw_name
+        product_name = override["product"] if override else raw_name
+        if canonical_name in seen:
+            continue
+
+        text_blob = card.get_text(" ", strip=True)
+        match = APY_PATTERN.search(text_blob)
+        if not match:
+            continue
+        rate_str = match.group("rate1") or match.group("rate2")
+        try:
+            apy = float(rate_str)
+        except (TypeError, ValueError):
+            continue
+        notes_el = card.find("p")
+        notes = notes_el.get_text(strip=True) if notes_el else None
+
+        rows.append(
+            CompetitorRow(
+                bank=bank_name,
+                product=product_name,
+                apy=apy,
+                aggregator_url=AGGREGATOR_URL,
+                canonical=canonical_name,
+                notes=notes,
             )
-
-    harvest_cards(list(soup.find_all("section")))
-    if not rows:
-        harvest_cards(list(soup.select("[data-testid='product-card'], [data-testid='best-card']")))
+        )
+        seen.add(canonical_name)
 
     return rows
 
@@ -131,7 +165,7 @@ def _parse_table(html: str) -> List[CompetitorRow]:
 def fetch_competitors(limit: int | None = None) -> List[Dict[str, Any]]:
     try:
         html = _load_html(AGGREGATOR_URL)
-        parsed = _parse_table(html)
+        parsed = _parse_cards(html)
         if not parsed:
             raise ValueError("No competitors parsed from aggregator page")
         rows = parsed
@@ -141,3 +175,6 @@ def fetch_competitors(limit: int | None = None) -> List[Dict[str, Any]]:
     if limit:
         rows = rows[:limit]
     return [row.as_dict() for row in rows]
+
+
+__all__ = ["fetch_competitors", "canonicalize", "BANK_OVERRIDES"]

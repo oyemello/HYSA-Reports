@@ -25,7 +25,7 @@ def _series_to_monthly(series: Iterable[Dict[str, float]]) -> pd.Series:
     frame = pd.DataFrame(series)
     frame["date"] = pd.to_datetime(frame["date"])
     frame = frame.sort_values("date").set_index("date")
-    monthly = frame.resample("M").last().ffill()
+    monthly = frame.resample("ME").last().ffill()
     return monthly["value"]
 
 

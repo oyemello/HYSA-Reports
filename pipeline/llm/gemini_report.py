@@ -7,7 +7,7 @@ from typing import Any, Dict
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL = "gemini-pro"
+DEFAULT_MODEL = "gemini-1.5-flash"
 
 
 def _condense_snapshot(data: Dict[str, Any]) -> str:
