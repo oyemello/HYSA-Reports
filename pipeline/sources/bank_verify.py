@@ -6,22 +6,22 @@ import re
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List
 
-import requests
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError, async_playwright
 from tenacity import retry, stop_after_attempt, wait_fixed
 
+from scraping.http_session import make_session
+from scraping.playwright_utils import ensure_pw_cache, playwright_context_kwargs
 from pipeline.sources.nerdwallet import BANK_OVERRIDES, canonicalize
 
 logger = logging.getLogger(__name__)
 
-try:
-    from crawl4ai import AsyncWebCrawler, BrowserConfig
-except ImportError:  # pragma: no cover - optional dependency at runtime
-    AsyncWebCrawler = None  # type: ignore[attr-defined]
-    BrowserConfig = None  # type: ignore[attr-defined]
-
-USER_AGENT = "Mozilla/5.0 (compatible; HYSA-Pipeline/1.0; +https://github.com/<me>/<my-hysa-poc>)"
+USER_AGENT = playwright_context_kwargs()["user_agent"]
 PROMO_KEYWORDS = re.compile(r"introductory|bonus|limited time|for the first|new money|teaser", re.IGNORECASE)
-APY_PATTERN = re.compile(r"(\d+\.\d+)\s*%", re.IGNORECASE)
+APY_PATTERNS = [
+    r"(\d+(?:\.\d+)?)\s*%\s*APY",
+    r"APY[^\d]*(\d+(?:\.\d+)?)\s*%",
+    r"Annual Percentage Yield[^\d]*(\d+(?:\.\d+)?)\s*%",
+]
 
 
 @dataclass
@@ -48,32 +48,32 @@ KNOWN_SITES: Dict[str, OfficialSite] = {
     ),
     canonicalize("Synchrony Bank High Yield Savings"): _site(
         "https://www.synchronybank.com/banking/savings/high-yield-savings/",
-        4.30,
+        4.3,
         "High Yield Savings",
     ),
     canonicalize("Discover Online Savings"): _site(
         "https://www.discover.com/online-banking/savings-account/",
-        4.30,
+        4.3,
         "Online Savings",
     ),
     canonicalize("CIT Bank Platinum Savings"): _site(
         "https://www.cit.com/cit-bank/savings-builder",
-        4.00,
+        4.0,
         "Platinum Savings",
     ),
     canonicalize("Marcus by Goldman Sachs Online Savings Account"): _site(
         "https://www.marcus.com/us/en/savings/online-savings-account",
-        4.40,
+        4.4,
         "Online Savings Account",
     ),
     canonicalize("SoFi Checking and Savings"): _site(
         "https://www.sofi.com/banking/checking-and-savings/",
-        4.60,
+        4.6,
         "Checking and Savings",
     ),
     canonicalize("E*TRADE Premium Savings"): _site(
         "https://us.etrade.com/bank/savings",
-        4.00,
+        4.0,
         "Premium Savings",
     ),
     canonicalize("Barclays Tiered Savings Account"): _site(
@@ -88,12 +88,12 @@ KNOWN_SITES: Dict[str, OfficialSite] = {
     ),
     canonicalize("UFB Portfolio Savings"): _site(
         "https://www.ufbdirect.com/banking/savings/ufb-savings",
-        3.90,
+        3.9,
         "Portfolio Savings",
     ),
     canonicalize("Openbank High Yield Savings"): _site(
         "https://www.myopenbanking.com/high-yield-savings",
-        4.20,
+        4.2,
         "High Yield Savings",
     ),
     canonicalize("Forbright Bank Growth Savings"): _site(
@@ -108,49 +108,60 @@ KNOWN_SITES: Dict[str, OfficialSite] = {
     ),
     canonicalize("LendingClub LevelUp Savings"): _site(
         "https://www.lendingclub.com/personal-banking/savings/levelup",
-        4.20,
+        4.2,
         "LevelUp Savings",
     ),
 }
 
 
-async def _fetch_with_crawl4ai(url: str) -> str:
-    if AsyncWebCrawler is None:
-        raise RuntimeError("crawl4ai is not available")
-    cfg = BrowserConfig(headless=True, java_script_enabled=True, user_agent=USER_AGENT)
-    async with AsyncWebCrawler(config=cfg) as crawler:
-        result = await crawler.arun(url=url)
-    html = getattr(result, "html", None) or getattr(result, "content", "")
-    if not html:
-        raise RuntimeError("crawl4ai returned empty document")
-    return html
+async def _async_fetch_html(url: str) -> str:
+    ensure_pw_cache()
+    async with async_playwright() as pw:
+        browser = await pw.chromium.launch(headless=True)
+        context = await browser.new_context(**playwright_context_kwargs())
+        page = await context.new_page()
+        await page.goto(url, wait_until="networkidle", timeout=60000)
+        html = await page.content()
+        await context.close()
+        await browser.close()
+        return html
+
+
+def _fetch_with_playwright(url: str) -> str:
+    return asyncio.run(_async_fetch_html(url))
 
 
 def _fetch_with_requests(url: str) -> str:
-    response = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=30)
-    response.raise_for_status()
+    session = make_session()
+    response = session.get(url)
     return response.text
+
+
+def _extract_apy(text: str) -> float | None:
+    normalized = re.sub(r"\s+", " ", text)
+    for pattern in APY_PATTERNS:
+        match = re.search(pattern, normalized, flags=re.IGNORECASE)
+        if match:
+            try:
+                return float(match.group(1))
+            except (TypeError, ValueError):
+                continue
+    return None
+
+
+def _detect_promo(text: str) -> bool:
+    return bool(PROMO_KEYWORDS.search(text))
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
 def _load_html(url: str) -> str:
     try:
-        return asyncio.run(_fetch_with_crawl4ai(url))
-    except Exception as exc:  # pragma: no cover - network fallbacks
-        logger.warning("crawl4ai fetch failed (%s); falling back to requests", exc)
-        return _fetch_with_requests(url)
-
-
-def _extract_apy(html: str, fallback: float) -> Dict[str, Any]:
-    match = APY_PATTERN.search(html)
-    promo = bool(PROMO_KEYWORDS.search(html))
-    apy = fallback
-    if match:
-        try:
-            apy = float(match.group(1))
-        except ValueError:
-            apy = fallback
-    return {"apy": apy, "promo": promo}
+        return _fetch_with_playwright(url)
+    except PlaywrightTimeoutError as exc:
+        logger.warning("Playwright timeout fetching %s (%s)", url, exc)
+    except Exception as exc:
+        logger.warning("Playwright fetch failed for %s (%s)", url, exc)
+    return _fetch_with_requests(url)
 
 
 def verify_competitors(competitors: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -159,9 +170,9 @@ def verify_competitors(competitors: Iterable[Dict[str, Any]]) -> List[Dict[str, 
         canonical_name = row.get("canonical") or canonicalize(row.get("product") or row.get("bank", ""))
         site = KNOWN_SITES.get(canonical_name)
         if not site:
+            note = row.get("notes") or ""
+            pending_note = f"{note} | verification pending" if note else "verification pending"
             logger.warning("No official site mapping configured for product=%s", row.get("product"))
-            existing_notes = row.get("notes") or ""
-            pending_note = f"{existing_notes} | verification pending" if existing_notes else "verification pending"
             verified.append(
                 {
                     "bank": row.get("bank", ""),
@@ -182,9 +193,9 @@ def verify_competitors(competitors: Iterable[Dict[str, Any]]) -> List[Dict[str, 
         except Exception as exc:  # pragma: no cover - offline fallback
             logger.error("Failed to scrape official site for %s: %s", row.get("bank"), exc)
             html = ""
-        extracted = _extract_apy(html, fallback=site.fallback_apy)
-        official_apy = extracted["apy"]
-        promo = extracted["promo"]
+        apy = _extract_apy(html) if html else None
+        promo = _detect_promo(html) if html else False
+        official_apy = apy if apy is not None else site.fallback_apy
         discrepancy_bps = int(round((official_apy - row.get("apy", official_apy)) * 100))
         verified.append(
             {
@@ -202,4 +213,4 @@ def verify_competitors(competitors: Iterable[Dict[str, Any]]) -> List[Dict[str, 
     return verified
 
 
-__all__ = ["verify_competitors"]
+__all__ = ["verify_competitors", "_extract_apy"]

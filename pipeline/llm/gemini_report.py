@@ -3,11 +3,14 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 from typing import Any, Dict
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_MODEL = "gemini-1.5-flash"
+SCHEMA_KEYS = ("title", "summary", "highlights", "methodology")
+SYSTEM_PROMPT = """You are a JSON generator. Produce ONLY JSON matching:\n{\n  \"title\": \"string\",\n  \"summary\": \"string\",\n  \"highlights\": [\"string\"],\n  \"methodology\": \"string\"\n}\nThe content should reflect the provided HYSA benchmarking metrics."""
 
 
 def _condense_snapshot(data: Dict[str, Any]) -> str:
@@ -26,54 +29,66 @@ def _build_prompt(data: Dict[str, Any]) -> str:
     summary = _condense_snapshot(data)
     forecasts = data.get("forecasts", {})
     prompt = (
-        "You are a banking analyst producing an executive-ready narrative for high-yield savings benchmarking.\n"
-        "Summarize insights in 6 structured sections. Use the JSON schema provided.\n"
-        "Focus on American Express vs. peers, highlight spreads, forecast takeaways, risks, and compliance notes.\n"
+        f"SYSTEM:\n{SYSTEM_PROMPT}\n"
+        "USER:\n"
+        "Summarize HYSA benchmarking findings for executives.\n"
+        "Focus on American Express vs peers, spreads, forecast insights, and compliance notes.\n"
         "Input data summary:\n"
         f"{summary}\n"
         "Forecast metrics (p50 cost of funds): "
         f"{forecasts.get('metrics', {}).get('cost_of_funds', {}).get('p50', [])}\n"
-        "Use concise bullet phrases for highlights, note scenario implications, and reference data freshness timestamps."
+        "Always reply with valid JSON only."
     )
     return prompt
 
 
-def _fallback_narrative(data: Dict[str, Any]) -> Dict[str, Any]:
-    snapshot = data.get("benchmark_snapshot", {})
-    forecasts = data.get("forecasts", {})
-    horizons = forecasts.get("horizons", [])
-    cost_p50 = forecasts.get("metrics", {}).get("cost_of_funds", {}).get("p50", [])
-    highlights = [
-        "American Express maintains a competitive national APY profile.",
-        "Peer median remains within a single-digit spread of AmEx, limiting share risk.",
-        "Modeled scenarios keep NIM resilient under baseline and dovish paths.",
-    ]
-    return {
-        "title": "American Express HYSA weekly benchmark",
-        "highlights": highlights,
-        "benchmarking": (
-            "American Express prices within {spread} bps of the peer median and tracks close to top-tier offers."
-        ).format(spread=snapshot.get("amex", {}).get("spread_to_median_bps", 0)),
-        "forecast_insights": (
-            f"Projected cost of funds across {horizons} centers on {cost_p50}. Scenario deltas remain manageable."
-        ),
-        "recommendations": "Hold current APY band while monitoring Ally and Capital One for fresh promotional pushes.",
-        "risks": "Watch for rapid Fed repricing or promotional tiers that could accelerate outflows.",
-        "compliance_block": "Narrative generated offline fallback; review prior to publication for accuracy.",
-    }
-
-
-def _extract_json(candidate: str) -> Dict[str, Any]:
-    candidate = candidate.strip()
-    if candidate.startswith("```"):
-        candidate = candidate.strip("`\n")
-        if candidate.startswith("json"):
-            candidate = candidate[4:]
+def _safe_json(payload: str) -> Dict[str, Any]:
     try:
-        return json.loads(candidate)
+        return json.loads(payload)
+    except json.JSONDecodeError:
+        start = payload.find("{")
+        end = payload.rfind("}")
+        if start == -1 or end == -1:
+            raise
+        return json.loads(payload[start : end + 1])
+
+
+def _normalize_doc(raw: str) -> Dict[str, Any]:
+    try:
+        doc = _safe_json(raw)
     except json.JSONDecodeError as exc:
         logger.error("Failed to parse Gemini response: %s", exc)
-        raise
+        return {key: [] if key == "highlights" else "" for key in SCHEMA_KEYS}
+    if not isinstance(doc, dict):
+        doc = {}
+    normalized: Dict[str, Any] = {}
+    for key in SCHEMA_KEYS:
+        value = doc.get(key)
+        if key == "highlights":
+            if not isinstance(value, list):
+                value = [str(value)] if value else []
+            normalized[key] = [str(item) for item in value]
+        else:
+            normalized[key] = str(value) if value else ""
+    return normalized
+
+
+def _fallback_narrative(data: Dict[str, Any]) -> Dict[str, Any]:
+    snapshot = data.get("benchmark_snapshot", {})
+    highlights = [
+        "American Express remains competitively positioned in HYSA rates.",
+        "Peer spreads stay within manageable ranges across scenarios.",
+        "Funding cost outlook shows limited downside under baseline assumptions.",
+    ]
+    return {
+        "title": "American Express HYSA benchmark update",
+        "summary": (
+            "American Express tracks peer medians closely, maintaining spreads of "
+            f"{snapshot.get('amex', {}).get('spread_to_median_bps', 0)} bps versus peers."
+        ),
+        "highlights": highlights,
+        "methodology": "Narrative generated via fallback template; review prior to publication.",
+    }
 
 
 def generate_narrative(data: Dict[str, Any]) -> Dict[str, Any]:
@@ -93,23 +108,31 @@ def generate_narrative(data: Dict[str, Any]) -> Dict[str, Any]:
         "temperature": 0.2,
         "max_output_tokens": 1024,
         "response_mime_type": "application/json",
+        "system_instruction": SYSTEM_PROMPT,
     }
     model = genai.GenerativeModel(model_name=DEFAULT_MODEL, generation_config=generation_config)
-    try:
-        response = model.generate_content(prompt)
-    except Exception as exc:  # pragma: no cover - network fallbacks
-        logger.error("Gemini generation failed (%s); using fallback", exc)
-        return _fallback_narrative(data)
-    text = getattr(response, "text", None) or getattr(response, "candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-    if not text:
-        logger.error("Gemini returned empty response; using fallback")
-        return _fallback_narrative(data)
-    try:
-        payload = _extract_json(text)
-    except json.JSONDecodeError:
-        return _fallback_narrative(data)
-    expected_keys = {"title", "highlights", "benchmarking", "forecast_insights", "recommendations", "risks", "compliance_block"}
-    if not expected_keys.issubset(payload.keys()):
-        logger.warning("Gemini output missing keys; falling back")
-        return _fallback_narrative(data)
-    return payload
+
+    attempts = 0
+    while attempts < 3:
+        attempts += 1
+        try:
+            response = model.generate_content(prompt)
+            text = getattr(response, "text", None)
+            if not text and getattr(response, "candidates", None):
+                text = response.candidates[0].content.parts[0].text  # type: ignore[attr-defined]
+            if not text:
+                raise ValueError("Gemini returned empty response")
+            normalized = _normalize_doc(text)
+            missing = [key for key in SCHEMA_KEYS if not normalized.get(key)]
+            if missing and attempts < 3:
+                logger.warning("Gemini response missing keys %s; retrying", missing)
+                time.sleep(1.5 * attempts)
+                continue
+            return normalized
+        except Exception as exc:  # pragma: no cover - network fallbacks
+            logger.error("Gemini generation failed (%s)", exc)
+            time.sleep(1.5 * attempts)
+    return _fallback_narrative(data)
+
+
+__all__ = ["generate_narrative", "_normalize_doc"]

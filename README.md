@@ -3,7 +3,7 @@
 Production-ready proof of concept that benchmarks American Express High Yield Savings against peer banks, projects 3/6/12 month outcomes, and publishes a Gemini-authored executive narrative. GitHub Actions refreshes the `/data` artifacts and deploys the Vite + React dashboard to GitHub Pages.
 
 ## Key capabilities
-- Crawl NerdWallet to discover competitors, then verify APYs against official product pages with crawl4ai + graceful fallbacks.
+- Crawl NerdWallet to discover competitors, then verify APYs against official product pages with Playwright rendering plus hardened HTTP fallbacks.
 - Maintain `/data/latest.json` and append history snapshots for reproducible timelines.
 - Compute peer medians/p75 overlays, AmEx spreads, and simple SARIMAX-based funding/NIM outlooks.
 - Generate Gemini JSON narratives (with offline fallback) that are rendered in the SPA and included verbatim in the PDF snapshot.
@@ -13,7 +13,7 @@ Production-ready proof of concept that benchmarks American Express High Yield Sa
 ## Architecture
 | Layer | Details |
 | --- | --- |
-| Data pipeline | `pipeline/run_pipeline.py` orchestrates crawl4ai scrapers, pandas transforms, SARIMAX forecasts (`statsmodels`), and Gemini narrative generation. Artifacts land under `data/` and history snapshots are auto-committed. |
+| Data pipeline | `pipeline/run_pipeline.py` orchestrates Playwright-driven scrapers, pandas transforms, stabilized SARIMAX/ETS forecasts (`statsmodels`), and Gemini narrative generation. Artifacts land under `data/` and history snapshots are auto-committed. |
 | Scraping | `pipeline/sources/nerdwallet.py` seeds from NerdWallet then `pipeline/sources/bank_verify.py` visits mapped official URLs. Robots directives respected; fallback seed data keeps pipeline stable without network. |
 | Macro inputs | `pipeline/sources/fed_macro.py` pulls Fed Funds via `fredapi` when available, with a bundled 10-year seed CSV fallback. Peer medians/p75 synthesize from Fed front-end behavior. |
 | Forecasting | `pipeline/transform/forecasts.py` fits SARIMAX where history allows and degrades to drift bands, translating into cost-of-funds, deposit volume, and NIM quantiles. |

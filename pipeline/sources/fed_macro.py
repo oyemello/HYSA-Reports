@@ -12,16 +12,22 @@ logger = logging.getLogger(__name__)
 
 FRED_SERIES = "FEDFUNDS"
 SEED_CSV = Path(__file__).with_name("fred_seed.csv")
+ALLOW_SEED = os.getenv("ALLOW_SEED_MACRO") == "1"
 
 
 def load_fed_funds(start: str | None = None) -> pd.DataFrame:
+    api_key = os.getenv("FRED_API_KEY")
+    if not api_key and not ALLOW_SEED:
+        raise RuntimeError(
+            "FRED_API_KEY is required. Set the environment variable or define ALLOW_SEED_MACRO=1 to use seed data."
+        )
+
     try:
         from fredapi import Fred  # type: ignore
     except ImportError as exc:  # pragma: no cover - optional dependency
         logger.warning("fredapi unavailable (%s); using seed macro data", exc)
         return _load_from_seed()
 
-    api_key = os.getenv("FRED_API_KEY")
     if not api_key:
         logger.warning("FRED_API_KEY not configured; using seed macro data")
         return _load_from_seed()

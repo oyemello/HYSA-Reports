@@ -14,6 +14,10 @@ const Narrative = ({ narrative }: Props) => {
       <div className="mt-4 space-y-4 text-sm text-slate-200">
         <h4 className="text-xl font-semibold text-slate-100">{narrative.title}</h4>
         <div>
+          <h5 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Summary</h5>
+          <p className="mt-1 text-slate-300">{narrative.summary}</p>
+        </div>
+        <div>
           <h5 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Highlights</h5>
           <ul className="mt-2 list-disc space-y-1 pl-5 text-slate-300">
             {narrative.highlights.map((item) => (
@@ -22,24 +26,8 @@ const Narrative = ({ narrative }: Props) => {
           </ul>
         </div>
         <div>
-          <h5 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Benchmarking</h5>
-          <p className="mt-1 text-slate-300">{narrative.benchmarking}</p>
-        </div>
-        <div>
-          <h5 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Forecast insights</h5>
-          <p className="mt-1 text-slate-300">{narrative.forecast_insights}</p>
-        </div>
-        <div>
-          <h5 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Recommendations</h5>
-          <p className="mt-1 text-slate-300">{narrative.recommendations}</p>
-        </div>
-        <div>
-          <h5 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Risks</h5>
-          <p className="mt-1 text-slate-300">{narrative.risks}</p>
-        </div>
-        <div>
-          <h5 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Compliance &amp; methodology</h5>
-          <p className="mt-1 text-slate-400">{narrative.compliance_block}</p>
+          <h5 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Methodology</h5>
+          <p className="mt-1 text-slate-400">{narrative.methodology}</p>
         </div>
       </div>
     </section>

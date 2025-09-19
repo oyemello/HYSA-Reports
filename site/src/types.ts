@@ -51,12 +51,9 @@ export interface Forecasts {
 
 export interface Narrative {
   title: string;
+  summary: string;
   highlights: string[];
-  benchmarking: string;
-  forecast_insights: string;
-  recommendations: string;
-  risks: string;
-  compliance_block: string;
+  methodology: string;
 }
 
 export interface AuditRecord {

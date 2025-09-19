@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import logging
+import warnings
 from dataclasses import dataclass
 from datetime import date
 from typing import Dict, Iterable, List
 
 import numpy as np
 import pandas as pd
-from statsmodels.tsa.statespace.sarimax import SARIMAX
+import statsmodels.api as sm
+from statsmodels.tools.sm_exceptions import ConvergenceWarning
 
 logger = logging.getLogger(__name__)
 
@@ -29,55 +31,53 @@ def _series_to_monthly(series: Iterable[Dict[str, float]]) -> pd.Series:
     return monthly["value"]
 
 
-def _fit_sarimax(values: pd.Series, steps: int) -> pd.DataFrame:
-    if len(values) < 6:
-        logger.warning("Insufficient history (%s points) for SARIMAX; using naive forecast", len(values))
-        last = values.iloc[-1]
-        index = pd.date_range(values.index[-1] + pd.offsets.MonthEnd(1), periods=steps, freq="M")
-        mean = np.full(steps, last)
-        p10 = mean - 0.1
-        p90 = mean + 0.1
-        return pd.DataFrame({"mean": mean, "p10": p10, "p90": p90}, index=index)
-    model = SARIMAX(
-        values,
-        order=(1, 1, 1),
-        seasonal_order=(0, 0, 0, 0),
-        trend="c",
-        enforce_stationarity=False,
-        enforce_invertibility=False,
-    )
+def _forecast(values: np.ndarray, steps: int) -> Dict[str, np.ndarray]:
+    mean = values.mean()
+    std = values.std() or 1.0
+    scaled = (values - mean) / std
     try:
-        fit = model.fit(disp=False)
-        forecast = fit.get_forecast(steps=steps)
-        conf = forecast.conf_int(alpha=0.2)  # 80% interval ~ p10/p90
-        mean = forecast.predicted_mean
-        idx = mean.index
-        return pd.DataFrame(
-            {
-                "mean": mean.values,
-                "p10": conf.iloc[:, 0].values,
-                "p90": conf.iloc[:, 1].values,
-            },
-            index=idx,
-        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", ConvergenceWarning)
+            model = sm.tsa.SARIMAX(
+                scaled,
+                order=(1, 1, 1),
+                enforce_stationarity=False,
+                enforce_invertibility=False,
+            )
+            result = model.fit(method="lbfgs", maxiter=1000, disp=False)
+            forecast = result.get_forecast(steps=steps)
+            mean_forecast = forecast.predicted_mean
+            conf = forecast.conf_int(alpha=0.2)
+            lower = conf.iloc[:, 0]
+            upper = conf.iloc[:, 1]
     except Exception as exc:
-        logger.error("SARIMAX fitting failed (%s); using fallback", exc)
-        last = values.iloc[-1]
-        index = pd.date_range(values.index[-1] + pd.offsets.MonthEnd(1), periods=steps, freq="M")
-        mean = np.full(steps, last)
-        p10 = mean - 0.1
-        p90 = mean + 0.1
-        return pd.DataFrame({"mean": mean, "p10": p10, "p90": p90}, index=index)
+        logger.warning("SARIMAX failed (%s); using ETS fallback", exc)
+        from statsmodels.tsa.holtwinters import ExponentialSmoothing
+
+        ets_model = ExponentialSmoothing(scaled, trend="add", seasonal=None)
+        result = ets_model.fit(optimized=True)
+        mean_forecast = result.forecast(steps)
+        resid_std = np.std(result.resid, ddof=1) or 0.05
+        lower = mean_forecast - 1.28 * resid_std
+        upper = mean_forecast + 1.28 * resid_std
+
+    mean_unscaled = mean_forecast * std + mean
+    lower_unscaled = lower * std + mean
+    upper_unscaled = upper * std + mean
+    return {
+        "p50": mean_unscaled,
+        "p10": lower_unscaled,
+        "p90": upper_unscaled,
+    }
 
 
-def _normalize_output(frame: pd.DataFrame, horizons: List[int]) -> Dict[str, List[float]]:
+def _normalize_output(forecast: Dict[str, np.ndarray], horizons: List[int]) -> Dict[str, List[float]]:
     out = {"p10": [], "p50": [], "p90": []}
     for months in horizons:
-        idx = months - 1
-        idx = min(idx, len(frame) - 1)
-        out["p50"].append(round(float(frame.iloc[idx]["mean"]), 4))
-        out["p10"].append(round(float(frame.iloc[idx]["p10"]), 4))
-        out["p90"].append(round(float(frame.iloc[idx]["p90"]), 4))
+        idx = max(0, min(months - 1, len(forecast["p50"]) - 1))
+        out["p50"].append(round(float(forecast["p50"][idx]), 4))
+        out["p10"].append(round(float(forecast["p10"][idx]), 4))
+        out["p90"].append(round(float(forecast["p90"][idx]), 4))
     return out
 
 
@@ -112,12 +112,11 @@ def build_forecasts(
     amex_series = bank_series.get("American Express") or next(iter(bank_series.values()))
     series = _series_to_monthly(amex_series)
     steps = max(HORIZONS)
-    outcome = _fit_sarimax(series, steps)
-    cost_of_funds = _normalize_output(outcome, HORIZONS)
+    forecast_arrays = _forecast(series.to_numpy(dtype=float), steps)
+    cost_of_funds = _normalize_output(forecast_arrays, HORIZONS)
 
-    current_rate = series.iloc[-1]
+    current_rate = float(series.iloc[-1])
     delta = np.array(cost_of_funds["p50"]) - current_rate
-    # deposit volume index anchored at 100
     deposit_p50 = 100 * (1 + (-assumptions.elasticity) * delta / 100)
     deposit_p10 = deposit_p50 * 0.98
     deposit_p90 = deposit_p50 * 1.02

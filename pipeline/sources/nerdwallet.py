@@ -7,25 +7,19 @@ import unicodedata
 from dataclasses import dataclass
 from typing import Any, Dict, List
 
-import requests
 from bs4 import BeautifulSoup
-from tenacity import retry, stop_after_attempt, wait_fixed
+from playwright.async_api import async_playwright
+
+from scraping.http_session import make_session
+from scraping.playwright_utils import ensure_pw_cache, playwright_context_kwargs
 
 logger = logging.getLogger(__name__)
 
-try:
-    from crawl4ai import AsyncWebCrawler, BrowserConfig
-except ImportError:  # pragma: no cover - optional dependency at runtime
-    AsyncWebCrawler = None  # type: ignore[attr-defined]
-    BrowserConfig = None  # type: ignore[attr-defined]
-
 AGGREGATOR_URL = "https://www.nerdwallet.com/best/banking/high-yield-online-savings-accounts"
-USER_AGENT = "Mozilla/5.0 (compatible; HYSA-Pipeline/1.0; +https://github.com/<me>/<my-hysa-poc>)"
 APY_PATTERN = re.compile(r"(?:APY\s*(?P<rate1>\d+\.\d+)%)|(?P<rate2>\d+\.\d+)\s*%", re.IGNORECASE)
 
 
 def canonicalize(label: str) -> str:
-    """Create a lowercase canonical key for matching bank/product names."""
     normalized = unicodedata.normalize("NFKD", label)
     cleaned = "".join(ch for ch in normalized if ch.isalnum() or ch.isspace())
     return re.sub(r"\s+", " ", cleaned).strip().lower()
@@ -91,30 +85,34 @@ class CompetitorRow:
         }
 
 
-async def _fetch_with_crawl4ai(url: str) -> str:
-    if AsyncWebCrawler is None:
-        raise RuntimeError("crawl4ai is not available")
-    cfg = BrowserConfig(headless=True, java_script_enabled=True, user_agent=USER_AGENT)
-    async with AsyncWebCrawler(config=cfg) as crawler:
-        result = await crawler.arun(url=url)
-    html = getattr(result, "html", None) or getattr(result, "content", "")
-    if not html:
-        raise RuntimeError("crawl4ai returned empty document")
-    return html
+async def _async_fetch_html(url: str) -> str:
+    ensure_pw_cache()
+    async with async_playwright() as pw:
+        browser = await pw.chromium.launch(headless=True)
+        context = await browser.new_context(**playwright_context_kwargs())
+        page = await context.new_page()
+        await page.goto(url, wait_until="networkidle", timeout=45000)
+        html = await page.content()
+        await context.close()
+        await browser.close()
+        return html
+
+
+def _fetch_with_playwright(url: str) -> str:
+    return asyncio.run(_async_fetch_html(url))
 
 
 def _fetch_with_requests(url: str) -> str:
-    response = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=30)
-    response.raise_for_status()
+    session = make_session()
+    response = session.get(url)
     return response.text
 
 
-@retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
 def _load_html(url: str) -> str:
     try:
-        return asyncio.run(_fetch_with_crawl4ai(url))
-    except Exception as exc:  # pragma: no cover - network fallbacks
-        logger.warning("crawl4ai fetch failed (%s); falling back to requests", exc)
+        return _fetch_with_playwright(url)
+    except Exception as exc:
+        logger.warning("Playwright fetch failed (%s); falling back to requests", exc)
         return _fetch_with_requests(url)
 
 
@@ -169,7 +167,7 @@ def fetch_competitors(limit: int | None = None) -> List[Dict[str, Any]]:
         if not parsed:
             raise ValueError("No competitors parsed from aggregator page")
         rows = parsed
-    except Exception as exc:  # pragma: no cover - offline fallback
+    except Exception as exc:  # pragma: no cover - network fallbacks
         logger.error("Falling back to seed competitor list: %s", exc)
         rows = [CompetitorRow(**row) for row in FALLBACK_BANKS]
     if limit:

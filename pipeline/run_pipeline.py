@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from datetime import datetime
 from pathlib import Path
 
 from rich.logging import RichHandler
+
+os.environ.setdefault("GRPC_VERBOSITY", "ERROR")
 
 from pipeline.llm.gemini_report import generate_narrative
 from pipeline.sources.bank_verify import verify_competitors
