@@ -41,7 +41,7 @@ const App = () => {
       <header className="border-b border-slate-900 bg-slate-950/80 backdrop-blur">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-6 py-5">
           <div className="flex items-center gap-3">
-            <img src="/logo.svg" alt="HYSA Bench logo" className="h-10 w-auto" />
+            <img src="/dls-logo-bluebox-solid.svg" alt="HYSA Bench logo" className="h-10 w-auto" />
             <div>
               <h1 className="text-xl font-semibold">HYSA Benchmarking Hub</h1>
               <p className="text-xs text-slate-400">American Express High Yield Savings vs. national peers</p>
