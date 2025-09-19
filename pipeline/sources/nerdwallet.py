@@ -18,7 +18,7 @@ except ImportError:  # pragma: no cover - optional dependency at runtime
     AsyncCrawler = None  # type: ignore
     BrowserConfig = None  # type: ignore
 
-AGGREGATOR_URL = "https://www.nerdwallet.com/article/banking/best-high-yield-online-savings-accounts"
+AGGREGATOR_URL = "https://www.nerdwallet.com/best/banking/high-yield-online-savings-accounts"
 USER_AGENT = "Mozilla/5.0 (compatible; HYSA-Pipeline/1.0; +https://github.com/<me>/<my-hysa-poc>)"
 
 FALLBACK_BANKS = [
@@ -97,31 +97,34 @@ HYSA_APY_PATTERN = re.compile(r"(?P<rate>\d+\.\d+)\s*%\s*APY", re.IGNORECASE)
 def _parse_table(html: str) -> List[CompetitorRow]:
     soup = BeautifulSoup(html, "lxml")
     rows: List[CompetitorRow] = []
-    cards = soup.find_all("section")
-    for card in cards:
-        text = card.get_text(separator=" ", strip=True)
-        match = HYSA_APY_PATTERN.search(text)
-        if not match:
-            continue
-        title = card.find(["h2", "h3"])
-        bank_name = title.get_text(strip=True) if title else ""
-        if not bank_name:
-            continue
-        notes = None
-        paragraph = card.find("p")
-        if paragraph:
-            notes = paragraph.get_text(strip=True)
-        apy = float(match.group("rate"))
-        product = "High Yield Savings"
-        rows.append(
-            CompetitorRow(
-                bank=bank_name,
-                product=product,
-                apy=apy,
-                aggregator_url=AGGREGATOR_URL,
-                notes=notes,
+
+    def harvest_cards(elements: List[Any]) -> None:
+        for element in elements:
+            text = element.get_text(separator=" ", strip=True)
+            match = HYSA_APY_PATTERN.search(text)
+            if not match:
+                continue
+            title = element.find(["h2", "h3", "h4"])
+            bank_name = (title.get_text(strip=True) if title else element.get("aria-label", "")).strip()
+            if not bank_name:
+                continue
+            paragraph = element.find("p")
+            notes = paragraph.get_text(strip=True) if paragraph else None
+            apy = float(match.group("rate"))
+            rows.append(
+                CompetitorRow(
+                    bank=bank_name,
+                    product="High Yield Savings",
+                    apy=apy,
+                    aggregator_url=AGGREGATOR_URL,
+                    notes=notes,
+                )
             )
-        )
+
+    harvest_cards(list(soup.find_all("section")))
+    if not rows:
+        harvest_cards(list(soup.select("[data-testid='product-card'], [data-testid='best-card']")))
+
     return rows
 
 
