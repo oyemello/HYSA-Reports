@@ -1,0 +1,138 @@
+{
+  "as_of": "2024-03-01T13:00:00Z",
+  "primary_bank": "American Express",
+  "banks_tracked": [
+    "American Express",
+    "Ally Bank",
+    "Capital One"
+  ],
+  "series": {
+    "fed_effective": [
+      {"date": "2023-12-01", "value": 5.33},
+      {"date": "2024-01-01", "value": 5.33},
+      {"date": "2024-02-01", "value": 5.32}
+    ],
+    "peer_median_hysa": [
+      {"date": "2023-12-01", "value": 4.35},
+      {"date": "2024-01-01", "value": 4.39},
+      {"date": "2024-02-01", "value": 4.42}
+    ],
+    "peer_p75_hysa": [
+      {"date": "2023-12-01", "value": 4.6},
+      {"date": "2024-01-01", "value": 4.64},
+      {"date": "2024-02-01", "value": 4.68}
+    ],
+    "bank_apys": {
+      "American Express": [
+        {"date": "2023-12-01", "value": 4.35},
+        {"date": "2024-01-01", "value": 4.35},
+        {"date": "2024-02-01", "value": 4.35}
+      ],
+      "Ally Bank": [
+        {"date": "2023-12-01", "value": 4.25},
+        {"date": "2024-01-01", "value": 4.3},
+        {"date": "2024-02-01", "value": 4.35}
+      ],
+      "Capital One": [
+        {"date": "2023-12-01", "value": 4.3},
+        {"date": "2024-01-01", "value": 4.35},
+        {"date": "2024-02-01", "value": 4.35}
+      ]
+    }
+  },
+  "benchmark_snapshot": {
+    "leader": {"bank": "Ally Bank", "apy": 4.35},
+    "peer_median": 4.42,
+    "peer_p75": 4.68,
+    "amex": {"apy": 4.35, "rank": 2, "spread_to_median_bps": -7}
+  },
+  "league_table": [
+    {
+      "bank": "American Express",
+      "apy": 4.35,
+      "promo": false,
+      "delta_7d_bps": 0,
+      "delta_30d_bps": 0,
+      "source_urls": {
+        "aggregator": "https://www.nerdwallet.com/article/banking/best-high-yield-online-savings-accounts",
+        "official": "https://www.americanexpress.com/en-us/banking/high-yield-savings-account/"
+      }
+    },
+    {
+      "bank": "Ally Bank",
+      "apy": 4.35,
+      "promo": false,
+      "delta_7d_bps": 5,
+      "delta_30d_bps": 10,
+      "source_urls": {
+        "aggregator": "https://www.nerdwallet.com/article/banking/best-high-yield-online-savings-accounts",
+        "official": "https://www.ally.com/bank/online-savings-account/"
+      }
+    },
+    {
+      "bank": "Capital One",
+      "apy": 4.35,
+      "promo": false,
+      "delta_7d_bps": 0,
+      "delta_30d_bps": 5,
+      "source_urls": {
+        "aggregator": "https://www.nerdwallet.com/article/banking/best-high-yield-online-savings-accounts",
+        "official": "https://www.capitalone.com/bank/savings-accounts/360-performance-savings-account/"
+      }
+    }
+  ],
+  "forecasts": {
+    "horizons": ["3m", "6m", "12m"],
+    "assumptions": {
+      "beta": 0.5,
+      "elasticity": -0.8,
+      "note": "industry priors, adjustable later"
+    },
+    "scenarios": {
+      "baseline": {"fed_path": [5.3, 5.2, 5.1], "description": "Base case aligns with futures-implied path."},
+      "hawkish": {"fed_path": [5.4, 5.35, 5.25], "description": "Fed pauses longer; upward pressure on costs."},
+      "dovish": {"fed_path": [5.2, 5.0, 4.8], "description": "Faster cutting cycle supportive of margins."}
+    },
+    "metrics": {
+      "cost_of_funds": {
+        "p10": [4.1, 4.0, 3.8],
+        "p50": [4.2, 4.1, 3.95],
+        "p90": [4.3, 4.2, 4.1]
+      },
+      "deposit_volume": {
+        "p10": [98.0, 94.0, 90.0],
+        "p50": [100.0, 101.0, 103.0],
+        "p90": [102.0, 106.0, 110.0]
+      },
+      "nim": {
+        "p10": [1.75, 1.7, 1.65],
+        "p50": [1.82, 1.85, 1.9],
+        "p90": [1.9, 1.95, 2.05]
+      }
+    }
+  },
+  "narrative": {
+    "title": "AmEx HYSA holds share as peers inch higher",
+    "highlights": [
+      "Peer median APY moved up 3 bps month over month while AmEx held flat at 4.35%.",
+      "Cost of funds risk remains bounded under both baseline and dovish scenarios.",
+      "Deposit balances projected to grow modestly even in the hawkish case."
+    ],
+    "benchmarking": "American Express remains competitive, sitting 7 bps under the peer median and tied for lead among large issuers.",
+    "forecast_insights": "Baseline case implies steady cost of funds near 4.2% with opportunity to widen NIM in dovish conditions.",
+    "recommendations": "Recommend holding the APY band between 4.30% and 4.40% while monitoring Ally promo campaigns.",
+    "risks": "Key risks include a surprise hawkish shift or aggressive promotional tiers that may erode share.",
+    "compliance_block": "Data reflects public sources as of 2024-03-01. Promotional language flagged from official disclosures."
+  },
+  "audit": {
+    "sources": [
+      {"name": "NerdWallet", "url": "https://www.nerdwallet.com/article/banking/best-high-yield-online-savings-accounts"},
+      {"name": "American Express", "url": "https://www.americanexpress.com/en-us/banking/high-yield-savings-account/"}
+    ],
+    "discrepancies": [],
+    "data_freshness": {
+      "competitor_rates": "2024-03-01T13:00:00Z",
+      "fed_series": "2024-03-01T13:00:00Z"
+    }
+  }
+}
