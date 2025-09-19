@@ -22,8 +22,12 @@ def load_fed_funds(start: str | None = None) -> pd.DataFrame:
         return _load_from_seed()
 
     api_key = os.getenv("FRED_API_KEY")
-    fred = Fred(api_key=api_key)
+    if not api_key:
+        logger.warning("FRED_API_KEY not configured; using seed macro data")
+        return _load_from_seed()
+
     try:
+        fred = Fred(api_key=api_key)
         series = fred.get_series(FRED_SERIES, observation_start=start)
         df = series.rename("value").to_frame()
         df.index.name = "date"
