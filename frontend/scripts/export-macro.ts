@@ -1,10 +1,9 @@
 #!/usr/bin/env node
-import 'dotenv/config';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { getMacroBundle } from '../src/macros.js';
+import { getMacroBundle } from './macros.js';
 
 async function main() {
   const macros = await getMacroBundle();
