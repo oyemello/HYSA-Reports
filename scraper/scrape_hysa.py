@@ -93,6 +93,15 @@ EXACT_NOISE = {
     "youtube",
 }
 
+LINK_KEYWORDS = ("savings", "apy", "rate", "yield", "high")
+CONTEXT_KEYWORDS = (
+    "apy",
+    "annual percentage yield",
+    "rate",
+    "savings",
+    "yield",
+)
+
 
 def clean_text(raw: Optional[str]) -> str:
     if not raw:
@@ -225,22 +234,38 @@ def scrape_accounts_fallback(client: Firecrawl) -> List[AccountRecord]:
                 return text
         return None
 
-    def find_bank_link(container: "BeautifulSoup") -> Optional[str]:
-        links = container.find_all("a", href=True)
-        best = None
-        for a in links:
-            href = a["href"].strip()
-            if not href.startswith("http"):
+    def find_links(container: "BeautifulSoup") -> Tuple[Optional[str], Optional[str]]:
+        external = None
+        review = None
+        for a in container.find_all("a", href=True):
+            href = a.get("href", "").strip()
+            if not href:
                 continue
-            if "nerdwallet.com" in href:
+            href_lower = href.lower()
+            text_lower = (a.get_text(" ", strip=True) or "").lower()
+
+            if href_lower.startswith("/"):
+                full = f"https://www.nerdwallet.com{href}"
+            else:
+                full = href
+
+            full_lower = full.lower()
+
+            if "nerdwallet.com" in full_lower:
+                if not review:
+                    review = full
                 continue
-            txt = (a.get_text(" ", strip=True) or "").lower()
-            if "savings" in txt or "high" in txt or "apy" in txt or "rate" in txt:
-                return href
-            if "savings" in href or "high-yield" in href or "rate" in href:
-                return href
-            best = best or href
-        return best
+
+            if not full.startswith("http"):
+                continue
+
+            if any(kw in full_lower for kw in LINK_KEYWORDS) or any(kw in text_lower for kw in LINK_KEYWORDS):
+                return full, review
+
+            if not external:
+                external = full
+
+        return external, review
 
     # Allow APY to be present or omitted next to percentage
     apy_re = re.compile(r"\b(\d{1,2}(?:\.\d{1,3})?)%(?:\s*APY)?\b", re.IGNORECASE)
@@ -260,12 +285,12 @@ def scrape_accounts_fallback(client: Firecrawl) -> List[AccountRecord]:
                 break
             container = container.parent if getattr(container, "parent", None) else container
 
-        # Require APY context to mention APY somewhere nearby to reduce noise
-        context_txt = clean_text(container.get_text(" ", strip=True))[:400]
-        if re.search(r"\bAPY\b", context_txt, re.I) is None:
+        # Require some savings context nearby to reduce noise
+        context_txt = clean_text(container.get_text(" ", strip=True))[:400].lower()
+        if context_txt and not any(kw in context_txt for kw in CONTEXT_KEYWORDS):
             continue
         bank = find_bank_name(container) or ""
-        link = find_bank_link(container)
+        external_link, review_link = find_links(container)
         key = (bank, apy_text)
         if bank and key not in seen:
             seen.add(key)
@@ -273,7 +298,8 @@ def scrape_accounts_fallback(client: Firecrawl) -> List[AccountRecord]:
                 AccountRecord(
                     institution=bank,
                     apy=apy_text,
-                    nerdwallet_link=link,
+                    nerdwallet_link=review_link or TARGET_URL,
+                    bank_link=external_link,
                 )
             )
 
@@ -295,6 +321,15 @@ def scrape_accounts_fallback(client: Firecrawl) -> List[AccountRecord]:
                     bank = candidate
                     break
             if bank:
+                review_link = None
+                for lookahead in range(i, min(len(lines), i + 6)):
+                    urls = re.findall(r"https?://[^\s)]+", lines[lookahead])
+                    for url in urls:
+                        if "nerdwallet.com" in url:
+                            review_link = url
+                            break
+                    if review_link:
+                        break
                 key = (bank, apy_text)
                 if key not in seen:
                     seen.add(key)
@@ -302,7 +337,7 @@ def scrape_accounts_fallback(client: Firecrawl) -> List[AccountRecord]:
                         AccountRecord(
                             institution=bank,
                             apy=apy_text,
-                            nerdwallet_link=None,
+                            nerdwallet_link=review_link or TARGET_URL,
                         )
                     )
 
