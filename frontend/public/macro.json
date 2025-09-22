@@ -1,5 +1,5 @@
 {
-  "generated_at": "2025-09-22T20:03:42.036Z",
+  "generated_at": "2025-09-22T20:53:58.302Z",
   "topHysa": null,
   "macros": {
     "EFFR": [
@@ -25044,6 +25044,11 @@
         "series": "DGS3MO",
         "date": "2025-09-18",
         "value": 4.03
+      },
+      {
+        "series": "DGS3MO",
+        "date": "2025-09-19",
+        "value": 4.03
       }
     ],
     "DGS1": [
@@ -37536,6 +37541,11 @@
         "series": "DGS1",
         "date": "2025-09-18",
         "value": 3.61
+      },
+      {
+        "series": "DGS1",
+        "date": "2025-09-19",
+        "value": 3.6
       }
     ],
     "SNDR": [
@@ -38082,5 +38092,10 @@
         "value": 1.7
       }
     ]
+  },
+  "features": {
+    "Spread_EFFR_minus_SNDR": 3.68,
+    "Spread_DGS3MO_minus_TopHYSA": null,
+    "Spread_DGS1_minus_TopHYSA": null
   }
 }
