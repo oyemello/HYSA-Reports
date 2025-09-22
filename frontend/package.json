@@ -8,7 +8,8 @@
     "build": "tsc -b tsconfig.app.json && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "macro": "tsx scripts/export-macro.ts"
+    "macro": "tsx scripts/export-macro.ts",
+    "peers": "tsx scripts/build-peers-json.ts"
   },
   "dependencies": {
     "dotenv": "^16.4.5",

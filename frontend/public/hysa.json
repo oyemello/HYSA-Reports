@@ -1,0 +1,91 @@
+{
+  "as_of": "2025-09-22T20:32:03.386Z",
+  "peer_median": 3.9,
+  "peer_p75": 4.2,
+  "rows": [
+    {
+      "bank": "Axos Bank",
+      "apy": 4.46,
+      "delta_7d": 0,
+      "delta_30d": 0,
+      "url": "https://www.nerdwallet.com/reviews/banking/axos-bank"
+    },
+    {
+      "bank": "Openbank by Santander",
+      "apy": 4.2,
+      "delta_7d": 0,
+      "delta_30d": 0,
+      "url": "https://www.nerdwallet.com/reviews/banking/santander-bank"
+    },
+    {
+      "bank": "Forbright Bank",
+      "apy": 4.25,
+      "delta_7d": 0,
+      "delta_30d": 0,
+      "url": "https://www.nerdwallet.com/reviews/banking/forbright-bank"
+    },
+    {
+      "bank": "Western Alliance Bank",
+      "apy": 4.25,
+      "delta_7d": 0,
+      "delta_30d": 0,
+      "url": "https://www.nerdwallet.com/reviews/banking/western-alliance-bank"
+    },
+    {
+      "bank": "E*TRADE",
+      "apy": 4,
+      "delta_7d": 0,
+      "delta_30d": 0,
+      "url": "https://www.nerdwallet.com/reviews/banking/etrade-checking-savings"
+    },
+    {
+      "bank": "Synchrony Bank",
+      "apy": 3.8,
+      "delta_7d": 0,
+      "delta_30d": 0,
+      "url": "https://www.nerdwallet.com/reviews/banking/synchrony-bank"
+    },
+    {
+      "bank": "Discover® Bank",
+      "apy": 3.5,
+      "delta_7d": 0,
+      "delta_30d": 0,
+      "url": "https://www.nerdwallet.com/reviews/banking/discover-bank"
+    },
+    {
+      "bank": "Marcus by Goldman Sachs",
+      "apy": 3.65,
+      "delta_7d": 0,
+      "delta_30d": 0,
+      "url": "https://www.nerdwallet.com/reviews/banking/goldman-sachs-bank"
+    },
+    {
+      "bank": "SoFi",
+      "apy": 3.8,
+      "delta_7d": 0,
+      "delta_30d": 0,
+      "url": "https://www.nerdwallet.com/reviews/banking/sofi"
+    },
+    {
+      "bank": "Capital One",
+      "apy": 3.5,
+      "delta_7d": 0,
+      "delta_30d": 0,
+      "url": "https://www.nerdwallet.com/reviews/banking/capital-one-bank"
+    },
+    {
+      "bank": "Barclays",
+      "apy": 3.9,
+      "delta_7d": 0,
+      "delta_30d": 0,
+      "url": "https://www.nerdwallet.com/reviews/banking/barclays-bank"
+    },
+    {
+      "bank": "UFB Direct",
+      "apy": 3.9,
+      "delta_7d": 0,
+      "delta_30d": 0,
+      "url": "https://www.nerdwallet.com/reviews/banking/ufb-direct"
+    }
+  ]
+}
