@@ -350,16 +350,21 @@ REDIRECT_PARAMETERS = [
 
 
 BRAND_DOMAIN_HINTS = {
-    "marcus by goldman sachs": "marcus.com",
-    "capital one": "capitalone.com",
-    "discover": "discover.com",
-    "synchrony": "synchronybank.com",
-    "barclays": "barclaysus.com",
-    "sofi": "sofi.com",
-    "ufb direct": "ufbdirect.com",
-    "western alliance": "westernalliancebank.com",
-    "forbright": "forbrightbank.com",
+    # Core brands from NerdWallet HYSA roundup
     "axos": "axosbank.com",
+    "openbank": "openbank.es",  # Openbank by Santander (EU)
+    "santander": "santanderbank.com",
+    "forbright": "forbrightbank.com",
+    "western alliance": "westernalliancebank.com",
+    "etrade": "etrade.com",
+    "synchrony": "synchronybank.com",
+    "discover": "discover.com",
+    "marcus by goldman sachs": "marcus.com",
+    "marcus": "marcus.com",
+    "sofi": "sofi.com",
+    "capital one": "capitalone.com",
+    "barclays": "barclaysus.com",
+    "ufb direct": "ufbdirect.com",
 }
 
 
@@ -460,13 +465,21 @@ def resolve_bank_link_from_review(review_url: Optional[str], institution: str, c
     candidates: List[str] = []
     if html_body:
         soup = BeautifulSoup(html_body, "html.parser")
+        affiliate_first: List[str] = []
+        others: List[str] = []
         for a in soup.find_all("a", href=True):
             href = a.get("href", "").strip()
             if not href:
                 continue
-            candidate = extract_redirect_target(href) or href
-            if is_external_bank(candidate):
-                candidates.append(candidate)
+            cand = extract_redirect_target(href) or href
+            if not is_external_bank(cand):
+                continue
+            href_l = href.lower()
+            if "go.nerdwallet.com" in href_l or "redirect" in href_l or "outbound" in href_l:
+                affiliate_first.append(cand)
+            else:
+                others.append(cand)
+        candidates = affiliate_first + others
     if candidates:
         ranked = sorted(candidates, key=lambda u: score_url(u, institution), reverse=True)
         return ranked[0]
@@ -474,30 +487,44 @@ def resolve_bank_link_from_review(review_url: Optional[str], institution: str, c
 
 
 def resolve_bank_link_by_search(institution: str, client: Firecrawl) -> Optional[str]:
-    try:
-        q = f"{institution} high-yield savings APY"
-        results = client.search(q, limit=5)
-        web = results.web or []
-    except Exception:
-        web = []
-    best = None
+    key = canonicalize(institution)
+    hint_domain = None
+    for name, domain in BRAND_DOMAIN_HINTS.items():
+        if name.replace(" ", "") in key:
+            hint_domain = domain
+            break
+
+    queries: List[str] = []
+    if hint_domain:
+        queries.append(f"site:{hint_domain} {institution} savings APY")
+        queries.append(f"site:{hint_domain} high-yield savings APY")
+    queries.append(f"{institution} high-yield savings APY")
+    queries.append(f"{institution} savings rates APY")
+
+    best: Optional[str] = None
     best_score = (-1, -1)
-    for r in web:
-        url = getattr(r, "url", None)
-        if not is_external_bank(url):
-            continue
-        s = score_url(url, institution)
-        if s > best_score:
-            best = url
-            best_score = s
-    # Brand-domain hint fallback
-    if not best:
-        key = canonicalize(institution)
-        for name, domain in BRAND_DOMAIN_HINTS.items():
-            if name.replace(" ", "") in key:
-                guess = f"https://{domain}/"
-                return guess
-    return best
+    for q in queries:
+        try:
+            res = client.search(q, limit=5)
+            web = res.web or []
+        except Exception:
+            web = []
+        for r in web:
+            url = getattr(r, "url", None)
+            if not is_external_bank(url):
+                continue
+            s = score_url(url, institution)
+            if s > best_score:
+                best = url
+                best_score = s
+        if best:
+            break
+
+    if best:
+        return best
+    if hint_domain:
+        return f"https://{hint_domain}/"
+    return None
 
 
 def fact_check_accounts(records: List[AccountRecord], gemini_key: Optional[str]) -> None:

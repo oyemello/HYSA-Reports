@@ -211,6 +211,28 @@ function App() {
               </div>
             )}
           </div>
+          {/* Feature roadmap cards */}
+          <section className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {[
+              "FRED Ingestion (10-year window)",
+              "Peer Stats + Deltas (for table + badges)",
+              "10-Year Chart (Fed vs Peers)",
+              "Spreads (profitability proxies) — feeds forecasts",
+              "Forecasts (3/6/12 months) — JSON only",
+              "Scenario Presets (Baseline / Hawkish / Dovish)",
+              "Executive Narrative (medium, detailed)",
+            ].map((title) => (
+              <div
+                key={title}
+                className="rounded-2xl bg-amex-white text-amex-blueDark shadow-lg shadow-amex-blue/20"
+              >
+                <div className="border-b border-amex-blue/10 bg-amex-blue px-5 py-3 text-amex-white">
+                  <h3 className="text-sm font-semibold uppercase tracking-wide">{title}</h3>
+                </div>
+                <div className="p-5 text-sm text-amex-blueDark/70">Coming soon</div>
+              </div>
+            ))}
+          </section>
         </main>
 
         <footer className="mt-10 text-center text-xs text-amex-blueLight">
