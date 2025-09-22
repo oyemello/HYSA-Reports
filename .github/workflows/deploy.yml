@@ -31,14 +31,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r scraper/requirements.txt
 
-      - name: Install Playwright browser and system deps (Python)
-        run: python -m playwright install --with-deps chromium
+      # Playwright removed; skip browser installs
 
       - name: Run scraper (Firecrawl + Gemini)
         env:
           FIRECRAWL_API_KEY: ${{ secrets.FIRECRAWL_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          RESOLVE_BANK_LINKS: 'true'
+          RESOLVE_BANK_LINKS: 'false'
         run: python scraper/scrape_hysa.py
 
       - name: Setup Node.js
