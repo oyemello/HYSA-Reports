@@ -10,7 +10,8 @@ type AccountRecord = {
 
 type FetchState = "idle" | "loading" | "success" | "error";
 
-const DATA_ENDPOINT = "/data/hysa_accounts.json";
+// Respect GitHub Pages base path in production builds
+const DATA_ENDPOINT = `${import.meta.env.BASE_URL}data/hysa_accounts.json`;
 
 const statusLabel = (value: boolean | null | undefined) => {
   if (value === true) return "Double checked";
