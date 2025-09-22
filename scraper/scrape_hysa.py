@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import difflib
+import html
 import json
 import os
 from dataclasses import dataclass, asdict
@@ -68,6 +69,58 @@ FACT_CHECK_PROMPT_TEMPLATE = (
     "- UNKNOWN (if the page is inaccessible or inconclusive)\n"
     "Provide a short justification after the label separated by a colon."
 )
+MARKDOWN_IMAGE_RE = re.compile(r"!\[[^\]]*\]\([^)]*\)")
+MARKDOWN_LINK_RE = re.compile(r"\[([^\]]+)\]\([^)]*\)")
+BULLET_PREFIX_RE = re.compile(r"^[\-\*\u2022\u00b7]+\s*")
+DATA_URI_RE = re.compile(r"data:image[^)]+\)", re.IGNORECASE)
+WHITESPACE_RE = re.compile(r"\s+")
+MIN_ALPHA_RE = re.compile(r"[a-zA-Z]{3}")
+NOISE_REGEX = re.compile(
+    r"flag|instagram|youtube|facebook|twitter|x.com|apple\s+podcasts|united\s+states|"
+    r"united\s+kingdom|usa only|rss feed|privacy|cookie",
+    re.IGNORECASE,
+)
+EXACT_NOISE = {
+    "usa",
+    "united states",
+    "united states flag",
+    "united kingdom",
+    "united kingdom flag",
+    "instagram",
+    "apple podcasts",
+    "facebook",
+    "twitter",
+    "youtube",
+}
+
+
+def clean_text(raw: Optional[str]) -> str:
+    if not raw:
+        return ""
+    text = html.unescape(raw)
+    text = MARKDOWN_IMAGE_RE.sub("", text)
+    text = DATA_URI_RE.sub("", text)
+    text = MARKDOWN_LINK_RE.sub(r"\1", text)
+    text = BULLET_PREFIX_RE.sub("", text)
+    text = text.replace("•", " ").replace("·", " ")
+    text = WHITESPACE_RE.sub(" ", text)
+    return text.strip(" -")
+
+
+def normalise_institution(raw: Optional[str]) -> str:
+    text = clean_text(raw)
+    if not text:
+        return ""
+    lower = text.lower()
+    if lower in EXACT_NOISE:
+        return ""
+    if NOISE_REGEX.search(lower):
+        return ""
+    if not MIN_ALPHA_RE.search(text):
+        return ""
+    if len(text) > 120:
+        return ""
+    return text
 
 
 @dataclass
@@ -123,10 +176,10 @@ def scrape_accounts(client: Firecrawl) -> List[AccountRecord]:
 
     records: List[AccountRecord] = []
     for item in accounts:
-        institution = str(item.get("institution", "")).strip()
-        apy = str(item.get("apy", "")).strip()
-        link = item.get("link")
-        link = str(link).strip() if link else None
+        institution = normalise_institution(item.get("institution"))
+        apy = clean_text(item.get("apy"))
+        link_raw = item.get("link")
+        link = str(link_raw).strip() if link_raw else None
         if not institution or not apy:
             continue
         records.append(AccountRecord(institution=institution, apy=apy, link=link))
@@ -157,30 +210,10 @@ def scrape_accounts_fallback(client: Firecrawl) -> List[AccountRecord]:
 
     soup = BeautifulSoup(html, "html.parser")
 
-    def sanitize_text(text: str) -> str:
-        # Remove markdown images/links and bullets if present
-        t = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", text)
-        t = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\\1", t)
-        t = re.sub(r"^[-*]\s+", "", t).strip()
-        # Collapse whitespace
-        t = re.sub(r"\s+", " ", t)
-        # Strip common noise terms
-        return t
-
-    noise_pat = re.compile(
-        r"flag|instagram|youtube|x\([^)]*\)|apple\s+podcasts|united\s+states|united\s+kingdom",
-        re.I,
-    )
-
     def find_bank_name(container: "BeautifulSoup") -> Optional[str]:
         for tag in container.find_all(["h1", "h2", "h3", "h4", "strong"], limit=5):
-            text = sanitize_text(tag.get_text(" ", strip=True))
-            if not text:
-                continue
-            if noise_pat.search(text):
-                continue
-            # Heuristic: prefer names without excessive punctuation
-            if len(text) >= 3 and len(text) <= 80:
+            text = normalise_institution(tag.get_text(" ", strip=True))
+            if text:
                 return text
         return None
 
@@ -220,13 +253,13 @@ def scrape_accounts_fallback(client: Firecrawl) -> List[AccountRecord]:
             container = container.parent if getattr(container, "parent", None) else container
 
         # Require APY context to mention APY somewhere nearby to reduce noise
-        context_txt = sanitize_text(container.get_text(" ", strip=True))[:400]
+        context_txt = clean_text(container.get_text(" ", strip=True))[:400]
         if re.search(r"\bAPY\b", context_txt, re.I) is None:
             continue
         bank = find_bank_name(container) or ""
         link = find_bank_link(container)
         key = (bank, apy_text)
-        if bank and not noise_pat.search(bank) and key not in seen:
+        if bank and key not in seen:
             seen.add(key)
             records.append(AccountRecord(institution=bank, apy=apy_text, link=link))
 
@@ -241,14 +274,15 @@ def scrape_accounts_fallback(client: Firecrawl) -> List[AccountRecord]:
             apy_text = m.group(0)
             # Look up a few lines for a plausible bank name (heading or bold)
             window = lines[max(0, i - 5):i]
-            bank = next((
-                sanitize_text(t.lstrip("# ").strip("* "))
-                for t in reversed(window)
-                if len(t.lstrip("#* ")) >= 3 and not noise_pat.search(t)
-            ), "")
+            bank = ""
+            for t in reversed(window):
+                candidate = normalise_institution(t.lstrip("# ").strip("* "))
+                if candidate:
+                    bank = candidate
+                    break
             if bank:
                 key = (bank, apy_text)
-                if key not in seen and not noise_pat.search(bank):
+                if key not in seen:
                     seen.add(key)
                     records.append(AccountRecord(institution=bank, apy=apy_text, link=None))
 

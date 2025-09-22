@@ -99,11 +99,10 @@ function App() {
       <div className="mx-auto flex min-h-screen max-w-6xl flex-col px-6 py-16">
         <header className="text-center">
           <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">
-            High-Yield Savings Account Tracker
+            AMEX HYSA APY Navigator
           </h1>
           <p className="mt-4 text-lg text-amex-blueLight">
-            Live snapshot of NerdWallet&apos;s featured institutions, scraped via Firecrawl and
-            fact-checked with Gemini.
+            Generates HYSA APY Reports by comparing with other financial institutions.
           </p>
         </header>
 
@@ -113,11 +112,11 @@ function App() {
               <div>
                 <h2 className="text-2xl font-semibold">Featured Institutions</h2>
                 <p className="text-sm text-amex-blueLight">
-                  Scraped from NerdWallet&apos;s best high-yield savings accounts roundup.
+                  Top 13 Institutions with Highest APYs
                 </p>
               </div>
               <span className="rounded-full bg-amex-white/20 px-4 py-2 text-sm font-medium">
-                Updated with Firecrawl
+                Updated via NerdWallet
               </span>
             </div>
 
@@ -208,7 +207,7 @@ function App() {
         </main>
 
         <footer className="mt-10 text-center text-xs text-amex-blueLight">
-          Data generated via Firecrawl scraping &amp; Gemini fact checking. Refresh after rerunning the scraper.
+          American Express Internal Tool. Data generated via Firecrawl scraping &amp; Gemini fact checking. Refresh after rerunning the scraper.
         </footer>
       </div>
     </div>
