@@ -214,13 +214,12 @@ function App() {
           {/* Feature roadmap cards */}
           <section className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {[
-              "FRED Ingestion (10-year window)",
-              "Peer Stats + Deltas (for table + badges)",
-              "10-Year Chart (Fed vs Peers)",
-              "Spreads (profitability proxies) — feeds forecasts",
-              "Forecasts (3/6/12 months) — JSON only",
-              "Scenario Presets (Baseline / Hawkish / Dovish)",
-              "Executive Narrative (medium, detailed)",
+              "PEER STATS + DELTAS (FOR TABLE + BADGES)",
+              "10-YEAR CHART (FED VS PEERS)",
+              "SPREADS (PROFITABILITY PROXIES) — FEEDS FORECASTS",
+              "FORECASTS (3/6/12 MONTHS)",
+              "SCENARIO PRESETS (BASELINE / HAWKISH / DOVISH)",
+              "EXECUTIVE NARRATIVE (MEDIUM, DETAILED)",
             ].map((title) => (
               <div
                 key={title}
