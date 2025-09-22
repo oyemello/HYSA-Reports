@@ -5,7 +5,7 @@
 @tailwind utilities;
 
 body {
-  @apply bg-amex-blueLight text-amex-blueDark font-sans antialiased;
+  @apply bg-slate-950 text-slate-100 font-sans antialiased;
 }
 
 #root {
