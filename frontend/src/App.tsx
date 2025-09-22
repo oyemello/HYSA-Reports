@@ -3,7 +3,10 @@ import { useEffect, useMemo, useState } from "react";
 type AccountRecord = {
   institution: string;
   apy: string;
+  // Backward-compat: some older JSON may still have `link`
   link?: string | null;
+  nerdwallet_link?: string | null;
+  bank_link?: string | null;
   double_check?: boolean | null;
   fact_check_notes?: string | null;
 };
@@ -157,31 +160,35 @@ function App() {
                         <td className="px-6 py-4 text-base font-medium">{record.institution}</td>
                         <td className="px-6 py-4 text-base font-semibold">{record.apy}</td>
                         <td className="px-6 py-4 text-base">
-                          {record.link ? (
-                            <a
-                              href={record.link}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-2 font-medium text-amex-blue hover:text-amex-blueDark"
-                            >
-                              Visit site
-                              <svg
-                                className="h-4 w-4"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                aria-hidden
+                          {(() => {
+                            const verifiedBank = record.double_check === true && record.bank_link;
+                            const fallback = record.nerdwallet_link || record.link || null;
+                            const href = (verifiedBank || fallback) as string | null;
+                            if (!href) return <span className="text-sm text-amex-blueDark/70">Not provided</span>;
+                            return (
+                              <a
+                                href={href}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-2 font-medium text-amex-blue hover:text-amex-blueDark"
                               >
-                                <path d="M7 17l10-10" />
-                                <path d="M7 7h10v10" />
-                              </svg>
-                            </a>
-                          ) : (
-                            <span className="text-sm text-amex-blueDark/70">Not provided</span>
-                          )}
+                                {verifiedBank ? "Visit bank" : "View source"}
+                                <svg
+                                  className="h-4 w-4"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  aria-hidden
+                                >
+                                  <path d="M7 17l10-10" />
+                                  <path d="M7 7h10v10" />
+                                </svg>
+                              </a>
+                            );
+                          })()}
                         </td>
                         <td className="px-6 py-4 text-base">
                           <span
