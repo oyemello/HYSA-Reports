@@ -1,4 +1,17 @@
-import 'dotenv/config';
+import { config as loadEnv } from 'dotenv';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+loadEnv();
+if (!process.env.FRED_API_KEY) {
+  loadEnv({ path: path.resolve(__dirname, '../.env') });
+}
+if (!process.env.FRED_API_KEY) {
+  loadEnv({ path: path.resolve(__dirname, '../../.env') });
+}
 
 export type FredObservation = {
   series: string;
