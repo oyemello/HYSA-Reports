@@ -1,0 +1,192 @@
+"""Scrape NerdWallet HYSA page using Firecrawl and fact-check with Gemini."""
+from __future__ import annotations
+
+import json
+import os
+from dataclasses import dataclass, asdict
+from typing import List, Optional
+
+from dotenv import load_dotenv
+from firecrawl import Firecrawl
+from firecrawl.v2.types import ExtractResponse
+from google.generativeai import GenerativeModel, configure
+
+TARGET_URL = "https://www.nerdwallet.com/best/banking/high-yield-online-savings-accounts"
+DEFAULT_DATA_PATH = os.path.join(
+    os.path.dirname(__file__),
+    "..",
+    "frontend",
+    "public",
+    "data",
+    "hysa_accounts.json",
+)
+
+EXTRACTION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "accounts": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "institution": {"type": "string"},
+                    "apy": {"type": "string"},
+                    "link": {"type": "string"},
+                },
+                "required": ["institution", "apy"],
+                "additionalProperties": False,
+            },
+        }
+    },
+    "required": ["accounts"],
+    "additionalProperties": False,
+}
+
+EXTRACTION_PROMPT = (
+    "Extract every bank or credit union highlighted in the roundup along with the "
+    "advertised high-yield savings account APY. Include the exact APY string as "
+    "published (keep percent symbols or qualifiers). Capture the best authoritative "
+    "link for the institution's savings account page that lists that APY."
+)
+
+FACT_CHECK_PROMPT_TEMPLATE = (
+    "You are validating APY data for a high-yield savings account.\n"
+    "Bank: {institution}\n"
+    "Claimed APY: {apy}\n"
+    "Source URL: {link}\n\n"
+    "Visit the source URL (follow redirects if needed) and confirm whether the page "
+    "supports the claimed APY today. Respond with one of the following exactly:\n"
+    "- VERIFIED (if the APY matches or is clearly supported)\n"
+    "- REJECTED (if the APY differs or cannot be confirmed)\n"
+    "- UNKNOWN (if the page is inaccessible or inconclusive)\n"
+    "Provide a short justification after the label separated by a colon."
+)
+
+
+@dataclass
+class AccountRecord:
+    institution: str
+    apy: str
+    link: Optional[str]
+    double_check: Optional[bool] = None
+    fact_check_notes: Optional[str] = None
+
+    def to_dict(self) -> dict:
+        payload = asdict(self)
+        # Keep consistent ordering for downstream consumers.
+        return {
+            "institution": payload["institution"],
+            "apy": payload["apy"],
+            "link": payload.get("link"),
+            "double_check": payload.get("double_check"),
+            "fact_check_notes": payload.get("fact_check_notes"),
+        }
+
+
+def ensure_output_directory(path: str) -> None:
+    directory = os.path.dirname(os.path.abspath(path))
+    os.makedirs(directory, exist_ok=True)
+
+
+def load_credentials() -> tuple[str, Optional[str]]:
+    """Load Firecrawl and Gemini credentials from the environment."""
+    load_dotenv()
+    firecrawl_key = os.getenv("FIRECRAWL_API_KEY")
+    if not firecrawl_key:
+        raise RuntimeError("FIRECRAWL_API_KEY is required to run the scraper.")
+    gemini_key = os.getenv("GEMINI_API_KEY")
+    return firecrawl_key, gemini_key
+
+
+def scrape_accounts(client: Firecrawl) -> List[AccountRecord]:
+    response: ExtractResponse = client.extract(
+        urls=[TARGET_URL],
+        schema=EXTRACTION_SCHEMA,
+        prompt=EXTRACTION_PROMPT,
+        show_sources=True,
+    )
+
+    if not response or not response.data:
+        raise RuntimeError("Firecrawl extraction did not return any data.")
+
+    accounts = response.data.get("accounts") if isinstance(response.data, dict) else None
+    if not accounts:
+        raise RuntimeError("Firecrawl extraction returned no accounts list.")
+
+    records: List[AccountRecord] = []
+    for item in accounts:
+        institution = str(item.get("institution", "")).strip()
+        apy = str(item.get("apy", "")).strip()
+        link = item.get("link")
+        link = str(link).strip() if link else None
+        if not institution or not apy:
+            continue
+        records.append(AccountRecord(institution=institution, apy=apy, link=link))
+
+    if not records:
+        raise RuntimeError("No valid account records parsed from Firecrawl response.")
+    return records
+
+
+def fact_check_accounts(records: List[AccountRecord], gemini_key: Optional[str]) -> None:
+    if not gemini_key:
+        for record in records:
+            record.double_check = None
+            record.fact_check_notes = (
+                "Skipped: GEMINI_API_KEY not provided; unable to verify automatically."
+            )
+        return
+
+    configure(api_key=gemini_key)
+    model = GenerativeModel("gemini-1.5-flash")
+
+    for record in records:
+        prompt = FACT_CHECK_PROMPT_TEMPLATE.format(
+            institution=record.institution,
+            apy=record.apy,
+            link=record.link or "(no link provided)",
+        )
+        try:
+            response = model.generate_content(prompt)
+            text = (response.text or "").strip()
+        except Exception as exc:  # pragma: no cover - defensive logging path
+            record.double_check = False
+            record.fact_check_notes = f"Gemini error: {exc}"
+            continue
+
+        label, _, note = text.partition(":")
+        label = label.strip().upper()
+        note = note.strip() if note else ""
+
+        if label == "VERIFIED":
+            record.double_check = True
+        elif label == "REJECTED":
+            record.double_check = False
+        else:
+            record.double_check = None
+
+        record.fact_check_notes = note or text
+
+
+def save_records(records: List[AccountRecord], path: Optional[str] = None) -> None:
+    output_path = path or os.getenv("OUTPUT_PATH") or DEFAULT_DATA_PATH
+    ensure_output_directory(output_path)
+    serialised = [record.to_dict() for record in records]
+    with open(output_path, "w", encoding="utf-8") as handle:
+        json.dump(serialised, handle, indent=2)
+
+
+def run() -> None:
+    firecrawl_key, gemini_key = load_credentials()
+    client = Firecrawl(api_key=firecrawl_key)
+    records = scrape_accounts(client)
+    fact_check_accounts(records, gemini_key)
+    save_records(records)
+    print(
+        f"Saved {len(records)} accounts to "
+        f"{os.path.relpath(os.getenv('OUTPUT_PATH') or DEFAULT_DATA_PATH)}"
+    )
+
+
+if __name__ == "__main__":
+    run()
