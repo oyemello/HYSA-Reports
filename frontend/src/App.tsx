@@ -148,7 +148,7 @@ function App() {
                         Link
                       </th>
                       <th scope="col" className="px-6 py-4 text-left font-medium uppercase tracking-wide">
-                        Double Check
+                        Verified
                       </th>
                     </tr>
                   </thead>
@@ -186,13 +186,10 @@ function App() {
                         </td>
                         <td className="px-6 py-4 text-base">
                           <span
-                            className="inline-flex items-center gap-3"
+                            className="inline-flex items-center"
                             title={record.fact_check_notes ?? statusLabel(record.double_check)}
                           >
                             <DoubleCheckIcon value={record.double_check} />
-                            <span className="text-sm text-amex-blueDark/70">
-                              {statusLabel(record.double_check)}
-                            </span>
                           </span>
                         </td>
                       </tr>

@@ -176,7 +176,8 @@ def scrape_accounts_fallback(client: Firecrawl) -> List[AccountRecord]:
             best = best or href
         return best
 
-    apy_re = re.compile(r"\b(\d{1,2}(?:\.\d{1,3})?)%\s*APY\b", re.IGNORECASE)
+    # Allow APY to be present or omitted next to percentage
+    apy_re = re.compile(r"\b(\d{1,2}(?:\.\d{1,3})?)%(?:\s*APY)?\b", re.IGNORECASE)
     seen = set()
     records: List[AccountRecord] = []
 
@@ -225,6 +226,92 @@ def scrape_accounts_fallback(client: Firecrawl) -> List[AccountRecord]:
         raise RuntimeError("Fallback parser could not identify any APY entries.")
 
     return records
+
+
+def resolve_outbound_links_with_playwright(records: List[AccountRecord]) -> None:
+    """Replace NerdWallet review links with actual external bank APY pages using Playwright.
+
+    - If a record.link is a NerdWallet URL, try to find an outbound link or click
+      the primary CTA to follow redirects to the bank and capture the final URL.
+    - This function is best-effort; failures leave the original link unchanged.
+    """
+    try:
+        from playwright.sync_api import sync_playwright
+    except Exception as exc:  # noqa: BLE001 - optional dependency handling
+        for r in records:
+            if r.link and "nerdwallet.com" in r.link:
+                r.fact_check_notes = (r.fact_check_notes or "") + " | Playwright not installed"
+        return
+
+    def is_external(url: str) -> bool:
+        return url.startswith("http") and "nerdwallet.com" not in url
+
+    def best_external_href(page) -> Optional[str]:
+        # Prefer visible CTAs
+        candidates = [
+            "a:has-text('Open')",
+            "a:has-text('Apply')",
+            "a:has-text('Learn')",
+            "a[aria-label*='Open']",
+            "a[aria-label*='Apply']",
+            "a[aria-label*='Learn']",
+        ]
+        for sel in candidates:
+            loc = page.locator(sel)
+            if loc.count() > 0:
+                href = loc.first.get_attribute("href")
+                if href and is_external(href):
+                    return href
+        # Any external link on page
+        for a in page.query_selector_all("a[href]"):
+            href = a.get_attribute("href") or ""
+            if is_external(href):
+                return href
+        # NerdWallet redirect links often embed the real URL as a query param
+        for a in page.query_selector_all("a[href*='redirect']"):
+            href = a.get_attribute("href") or ""
+            # naive extract of url= param if present
+            if "url=" in href:
+                try:
+                    from urllib.parse import parse_qs, urlparse, unquote
+                    qs = parse_qs(urlparse(href).query)
+                    tgt = qs.get("url", [None])[0]
+                    if tgt:
+                        tgt = unquote(tgt)
+                        if is_external(tgt):
+                            return tgt
+                except Exception:
+                    pass
+        return None
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context()
+        page = context.new_page()
+        for r in records:
+            if not r.link or "nerdwallet.com" not in r.link:
+                continue
+            try:
+                page.goto(r.link, wait_until="domcontentloaded", timeout=30000)
+                page.wait_for_load_state("networkidle", timeout=30000)
+                # Try best known hrefs first
+                new_href = best_external_href(page)
+                if not new_href:
+                    # Try clicking primary CTA and capture resulting URL
+                    cta = page.locator("a:has-text('Open'), a:has-text('Apply'), a:has-text('Learn')").first
+                    if cta and cta.count() > 0:
+                        with page.expect_navigation(timeout=30000):
+                            cta.click()
+                        if is_external(page.url):
+                            new_href = page.url
+                if new_href and is_external(new_href):
+                    r.link = new_href
+                else:
+                    r.fact_check_notes = (r.fact_check_notes or "") + " | Could not resolve bank URL"
+            except Exception as exc:  # pragma: no cover - network/browser flakiness
+                r.fact_check_notes = (r.fact_check_notes or "") + f" | Playwright error: {exc}"
+        context.close()
+        browser.close()
 
 
 def fact_check_accounts(records: List[AccountRecord], gemini_key: Optional[str]) -> None:
@@ -279,6 +366,9 @@ def run() -> None:
     firecrawl_key, gemini_key = load_credentials()
     client = Firecrawl(api_key=firecrawl_key)
     records = scrape_accounts(client)
+    # Attempt to convert NerdWallet links to bank landing pages
+    if os.getenv("RESOLVE_BANK_LINKS", "true").lower() in ("1", "true", "yes"):
+        resolve_outbound_links_with_playwright(records)
     fact_check_accounts(records, gemini_key)
     save_records(records)
     print(
