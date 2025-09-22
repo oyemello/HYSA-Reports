@@ -1,1 +1,86 @@
-[]
+[
+  {
+    "institution": "Axos Bank",
+    "apy": "4.46%",
+    "link": "https://www.nerdwallet.com/reviews/banking/axos-bank",
+    "double_check": false,
+    "fact_check_notes": "The provided URL, NerdWallet's review of Axos Bank, does not contain current APY information for Axos Bank's high-yield savings account.  While it mentions Axos Bank, it doesn't provide specific, verifiable APY data."
+  },
+  {
+    "institution": "Openbank by Santander",
+    "apy": "4.20%",
+    "link": "https://www.nerdwallet.com/reviews/banking/santander-bank",
+    "double_check": false,
+    "fact_check_notes": "The provided NerdWallet URL does not contain current APY information for Openbank by Santander's high-yield savings account.  While it mentions Santander Bank, it does not provide specific APY details for their high-yield offerings."
+  },
+  {
+    "institution": "Forbright Bank",
+    "apy": "4.25%",
+    "link": "https://www.nerdwallet.com/reviews/banking/forbright-bank",
+    "double_check": false,
+    "fact_check_notes": "The provided NerdWallet URL does not currently list a specific APY for Forbright Bank's high-yield savings account.  Therefore, the claimed APY of 4.25% cannot be verified."
+  },
+  {
+    "institution": "Western Alliance Bank",
+    "apy": "4.25%",
+    "link": "https://www.nerdwallet.com/reviews/banking/western-alliance-bank",
+    "double_check": false,
+    "fact_check_notes": "The provided URL, NerdWallet's review of Western Alliance Bank, does not contain current information on APYs for high-yield savings accounts.  Therefore, the claimed APY cannot be verified."
+  },
+  {
+    "institution": "E*TRADE",
+    "apy": "4.00%",
+    "link": "https://www.nerdwallet.com/reviews/banking/etrade-checking-savings",
+    "double_check": false,
+    "fact_check_notes": "The provided NerdWallet article is an overview of E*TRADE's checking and savings accounts and does not state a specific APY for their high-yield savings account.  The article's last update date is also quite old (July 2023), meaning the APY information is likely outdated."
+  },
+  {
+    "institution": "Synchrony Bank",
+    "apy": "3.80%",
+    "link": "https://www.nerdwallet.com/reviews/banking/synchrony-bank",
+    "double_check": false,
+    "fact_check_notes": "The provided NerdWallet link does not specify a current APY for Synchrony Bank's high-yield savings account.  While it mentions Synchrony Bank, it doesn't provide the specific APY data needed for verification."
+  },
+  {
+    "institution": "Discover\u00ae Bank",
+    "apy": "3.50%",
+    "link": "https://www.nerdwallet.com/reviews/banking/discover-bank",
+    "double_check": false,
+    "fact_check_notes": "The provided NerdWallet URL does not contain current APY information for Discover Bank high-yield savings accounts.  While it mentions Discover Bank, it does not list a specific APY for their savings accounts."
+  },
+  {
+    "institution": "Marcus by Goldman Sachs",
+    "apy": "3.65%",
+    "link": "https://www.nerdwallet.com/reviews/banking/goldman-sachs-bank",
+    "double_check": false,
+    "fact_check_notes": "The provided URL, NerdWallet's review of Goldman Sachs Bank, does not contain current APY information for Marcus by Goldman Sachs high-yield savings accounts.  While it mentions Marcus, it doesn't state a specific APY."
+  },
+  {
+    "institution": "SoFi",
+    "apy": "3.80%",
+    "link": "https://www.nerdwallet.com/reviews/banking/sofi",
+    "double_check": false,
+    "fact_check_notes": "The provided NerdWallet URL is a general review page for SoFi and does not contain current APY information for SoFi's high-yield savings account.  Therefore, the claimed APY cannot be verified."
+  },
+  {
+    "institution": "Capital One",
+    "apy": "3.50%",
+    "link": "https://www.nerdwallet.com/reviews/banking/capital-one-bank",
+    "double_check": false,
+    "fact_check_notes": "The provided URL, NerdWallet's review of Capital One Bank, does not contain current APY information for Capital One high-yield savings accounts.  While it mentions Capital One, it does not list a specific APY."
+  },
+  {
+    "institution": "Barclays",
+    "apy": "3.90%",
+    "link": "https://www.nerdwallet.com/reviews/banking/barclays-bank",
+    "double_check": false,
+    "fact_check_notes": "The provided URL, https://www.nerdwallet.com/reviews/banking/barclays-bank, is a review of Barclays Bank, not a live source of their current APY.  The article mentions Barclays offering high-yield savings accounts, but it does not state a current APY of 3.90% or any specific APY."
+  },
+  {
+    "institution": "UFB Direct",
+    "apy": "3.90%",
+    "link": "https://www.nerdwallet.com/reviews/banking/ufb-direct",
+    "double_check": false,
+    "fact_check_notes": "The NerdWallet page linked does not currently show a 3.90% APY for UFB Direct high-yield savings accounts.  The current rate listed is lower."
+  }
+]

@@ -9,6 +9,8 @@ from typing import List, Optional
 from dotenv import load_dotenv
 from firecrawl import Firecrawl
 from firecrawl.v2.types import ExtractResponse
+from bs4 import BeautifulSoup
+import re
 from google.generativeai import GenerativeModel, configure
 
 TARGET_URL = "https://www.nerdwallet.com/best/banking/high-yield-online-savings-accounts"
@@ -111,7 +113,8 @@ def scrape_accounts(client: Firecrawl) -> List[AccountRecord]:
 
     accounts = response.data.get("accounts") if isinstance(response.data, dict) else None
     if not accounts:
-        raise RuntimeError("Firecrawl extraction returned no accounts list.")
+        # Fallback: scrape raw content and heuristically parse APY + institution + link
+        return scrape_accounts_fallback(client)
 
     records: List[AccountRecord] = []
     for item in accounts:
@@ -125,6 +128,102 @@ def scrape_accounts(client: Firecrawl) -> List[AccountRecord]:
 
     if not records:
         raise RuntimeError("No valid account records parsed from Firecrawl response.")
+    return records
+
+
+def scrape_accounts_fallback(client: Firecrawl) -> List[AccountRecord]:
+    from firecrawl.v2.types import WaitAction, ScrollAction
+
+    doc = client.scrape(
+        TARGET_URL,
+        formats=["html", "markdown"],
+        only_main_content=False,
+        wait_for=2000,
+        block_ads=True,
+        actions=[
+            WaitAction(milliseconds=1500),
+            ScrollAction(direction="down"),
+            WaitAction(milliseconds=800),
+        ],
+    )
+    html = doc.html or doc.raw_html or ""
+    if not html:
+        raise RuntimeError("Fallback scrape returned no HTML content.")
+
+    soup = BeautifulSoup(html, "html.parser")
+
+    def find_bank_name(container: "BeautifulSoup") -> Optional[str]:
+        for tag in container.find_all(["h1", "h2", "h3", "h4", "strong"], limit=5):
+            text = tag.get_text(strip=True)
+            if text and len(text) >= 3:
+                return text
+        return None
+
+    def find_bank_link(container: "BeautifulSoup") -> Optional[str]:
+        links = container.find_all("a", href=True)
+        best = None
+        for a in links:
+            href = a["href"].strip()
+            if not href.startswith("http"):
+                continue
+            if "nerdwallet.com" in href:
+                continue
+            txt = (a.get_text(" ", strip=True) or "").lower()
+            if "savings" in txt or "high" in txt or "apy" in txt or "rate" in txt:
+                return href
+            if "savings" in href or "high-yield" in href or "rate" in href:
+                return href
+            best = best or href
+        return best
+
+    apy_re = re.compile(r"\b(\d{1,2}(?:\.\d{1,3})?)%\s*APY\b", re.IGNORECASE)
+    seen = set()
+    records: List[AccountRecord] = []
+
+    # Search for APY strings and walk up to a reasonable container card
+    for el in soup.find_all(string=apy_re):
+        match = apy_re.search(str(el))
+        if not match:
+            continue
+        apy_text = match.group(0)
+        container = el
+        # climb a few levels to get the card context
+        for _ in range(6):
+            if hasattr(container, "find") and container.name in ("article", "section", "div", "li"):
+                break
+            container = container.parent if getattr(container, "parent", None) else container
+
+        bank = find_bank_name(container) or ""
+        link = find_bank_link(container)
+        key = (bank, apy_text)
+        if bank and key not in seen:
+            seen.add(key)
+            records.append(AccountRecord(institution=bank, apy=apy_text, link=link))
+
+    if not records:
+        # Try parsing markdown as a secondary fallback
+        md = doc.markdown or ""
+        lines = [ln.strip() for ln in md.splitlines()]
+        for i, ln in enumerate(lines):
+            m = apy_re.search(ln)
+            if not m:
+                continue
+            apy_text = m.group(0)
+            # Look up a few lines for a plausible bank name (heading or bold)
+            window = lines[max(0, i - 5):i]
+            bank = next((
+                t.lstrip("# ").strip("* ") for t in reversed(window)
+                if len(t.lstrip("#* ")) >= 3
+            ), "")
+            if bank:
+                key = (bank, apy_text)
+                if key not in seen:
+                    seen.add(key)
+                    records.append(AccountRecord(institution=bank, apy=apy_text, link=None))
+
+    if not records:
+        raise RuntimeError("Fallback parser could not identify any APY entries.")
+
     return records
 
 
