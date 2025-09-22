@@ -152,10 +152,30 @@ def scrape_accounts_fallback(client: Firecrawl) -> List[AccountRecord]:
 
     soup = BeautifulSoup(html, "html.parser")
 
+    def sanitize_text(text: str) -> str:
+        # Remove markdown images/links and bullets if present
+        t = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", text)
+        t = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\\1", t)
+        t = re.sub(r"^[-*]\s+", "", t).strip()
+        # Collapse whitespace
+        t = re.sub(r"\s+", " ", t)
+        # Strip common noise terms
+        return t
+
+    noise_pat = re.compile(
+        r"flag|instagram|youtube|x\([^)]*\)|apple\s+podcasts|united\s+states|united\s+kingdom",
+        re.I,
+    )
+
     def find_bank_name(container: "BeautifulSoup") -> Optional[str]:
         for tag in container.find_all(["h1", "h2", "h3", "h4", "strong"], limit=5):
-            text = tag.get_text(strip=True)
-            if text and len(text) >= 3:
+            text = sanitize_text(tag.get_text(" ", strip=True))
+            if not text:
+                continue
+            if noise_pat.search(text):
+                continue
+            # Heuristic: prefer names without excessive punctuation
+            if len(text) >= 3 and len(text) <= 80:
                 return text
         return None
 
@@ -194,10 +214,14 @@ def scrape_accounts_fallback(client: Firecrawl) -> List[AccountRecord]:
                 break
             container = container.parent if getattr(container, "parent", None) else container
 
+        # Require APY context to mention APY somewhere nearby to reduce noise
+        context_txt = sanitize_text(container.get_text(" ", strip=True))[:400]
+        if re.search(r"\bAPY\b", context_txt, re.I) is None:
+            continue
         bank = find_bank_name(container) or ""
         link = find_bank_link(container)
         key = (bank, apy_text)
-        if bank and key not in seen:
+        if bank and not noise_pat.search(bank) and key not in seen:
             seen.add(key)
             records.append(AccountRecord(institution=bank, apy=apy_text, link=link))
 
@@ -213,12 +237,13 @@ def scrape_accounts_fallback(client: Firecrawl) -> List[AccountRecord]:
             # Look up a few lines for a plausible bank name (heading or bold)
             window = lines[max(0, i - 5):i]
             bank = next((
-                t.lstrip("# ").strip("* ") for t in reversed(window)
-                if len(t.lstrip("#* ")) >= 3
+                sanitize_text(t.lstrip("# ").strip("* "))
+                for t in reversed(window)
+                if len(t.lstrip("#* ")) >= 3 and not noise_pat.search(t)
             ), "")
             if bank:
                 key = (bank, apy_text)
-                if key not in seen:
+                if key not in seen and not noise_pat.search(bank):
                     seen.add(key)
                     records.append(AccountRecord(institution=bank, apy=apy_text, link=None))
 
