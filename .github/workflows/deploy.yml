@@ -31,11 +31,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r scraper/requirements.txt
 
-      - name: Setup Playwright system deps and browsers
-        uses: microsoft/playwright-github-action@v1
-
-      - name: Install Playwright browsers (python)
-        run: python -m playwright install chromium
+      - name: Install Playwright browser and system deps (Python)
+        run: python -m playwright install --with-deps chromium
 
       - name: Run scraper (Firecrawl + Gemini)
         env:
