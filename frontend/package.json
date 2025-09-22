@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "macro": "tsx scripts/export-macro.ts",
     "peers": "tsx scripts/build-peers-json.ts",
-    "forecast": "tsx scripts/run-gemini-forecast.ts"
+    "forecast": "tsx scripts/run-gemini-forecast.ts",
+    "scenarios": "tsx scripts/build-scenarios.ts"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
