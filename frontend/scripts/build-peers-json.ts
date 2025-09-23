@@ -92,6 +92,36 @@ const isoDate = (time: number) => new Date(time).toISOString().slice(0, 10);
   const todayIso = isoDate(now.getTime());
   currentRows.forEach((row) => pushPoint(row.key, todayIso, row.apy));
   const peerValues = currentRows.map((row) => row.apy).filter((value) => Number.isFinite(value));
+  const todayMedian = stat(peerValues);
+  const todayP75 = stat(peerValues, 75);
+
+  const ensureBaseline = (points: Array<{ date: string; value: number }>, value: number) => {
+    if (!points.length || points[points.length - 1].date !== todayIso) {
+      points.push({ date: todayIso, value });
+    }
+    if (points.length === 1) {
+      const anchorDate = isoDate(minTime);
+      if (points[0].date !== anchorDate) {
+        points.unshift({ date: anchorDate, value: points[0].value });
+      }
+    }
+  };
+
+  ensureBaseline(medianSeries, todayMedian);
+  ensureBaseline(p75Series, todayP75);
+
+  historyMap.forEach((points, key) => {
+    if (!points.length) {
+      const current = currentRows.find((row) => row.key === key)?.apy;
+      if (current !== undefined) points.push({ date: todayIso, value: current });
+    }
+    if (points.length === 1) {
+      const anchorDate = isoDate(minTime);
+      if (points[0].date !== anchorDate) {
+        points.unshift({ date: anchorDate, value: points[0].value });
+      }
+    }
+  });
 
   const historyPayload = {
     banks: currentRows.map((row) => ({ id: row.key, name: row.bank })),

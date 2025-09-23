@@ -18,6 +18,14 @@ type Props = {
 
 type HoverEntry = { label: string; color: string; value: number | null };
 
+type LineSeries = {
+  id: string;
+  label: string;
+  color: string;
+  points: SeriesPoint[];
+  dashed?: boolean;
+};
+
 const COLORS = [
   "#38bdf8",
   "#34d399",
@@ -31,12 +39,19 @@ const COLORS = [
 
 const toSeries = (rows?: Array<{ date: string; value: number }>, min?: number, max?: number): SeriesPoint[] => {
   if (!rows) return [];
-  return rows
+  const points = rows
     .map(({ date, value }) => ({ date: new Date(date), value: Number(value) }))
     .filter((point) => Number.isFinite(point.value) && Number.isFinite(point.date.getTime()))
     .filter((point) => (min === undefined || point.date.getTime() >= min))
     .filter((point) => (max === undefined || point.date.getTime() <= max))
     .sort((a, b) => a.date.getTime() - b.date.getTime());
+  if (points.length === 1 && min !== undefined) {
+    const anchor = new Date(min);
+    if (anchor.getTime() !== points[0].date.getTime()) {
+      points.unshift({ date: anchor, value: points[0].value });
+    }
+  }
+  return points;
 };
 
 const formatPercent = (value: number | null, digits = 2) =>
@@ -51,59 +66,58 @@ const PeerComparisonChart = ({ macros, history }: Props) => {
     return d;
   }, [today]);
 
-  const fedSeries = useMemo(() => {
-    const series = macros?.EFFR ?? macros?.FEDFUNDS ?? [];
-    return toSeries(series, minDate.getTime(), today.getTime());
-  }, [macros, minDate, today]);
-
-  const peerMedianSeries = useMemo(
-    () => toSeries(history?.peer_median_series, minDate.getTime(), today.getTime()),
-    [history, minDate, today],
-  );
-  const peerP75Series = useMemo(
-    () => toSeries(history?.peer_p75_series, minDate.getTime(), today.getTime()),
-    [history, minDate, today],
-  );
+  const baselineSeries: LineSeries[] = useMemo(() => {
+    const fed = toSeries(macros?.EFFR ?? macros?.FEDFUNDS, minDate.getTime(), today.getTime());
+    const peerMedian = toSeries(history?.peer_median_series, minDate.getTime(), today.getTime());
+    const peerP75 = toSeries(history?.peer_p75_series, minDate.getTime(), today.getTime());
+    return [
+      { id: "fed", label: "Fed effective rate", color: "#38bdf8", points: fed },
+      { id: "peer_median", label: "Peer median", color: "#34d399", points: peerMedian },
+      { id: "peer_p75", label: "Peer 75th percentile", color: "#fbbf24", points: peerP75, dashed: true },
+    ];
+  }, [macros, history, minDate, today]);
 
   const [selectedPeers, setSelectedPeers] = useState<string[]>([]);
   useEffect(() => {
     if (!history?.banks?.length) return;
     setSelectedPeers((prev) => {
-      if (prev.length) return prev.filter((id) => history.banks.some((bank) => bank.id === id));
-      return history.banks.slice(0, 3).map((bank) => bank.id);
+      if (prev.length) {
+        return prev.filter((id) => history.banks.some((bank) => bank.id === id));
+      }
+      const prioritized = history.banks.slice(0, 5);
+      const amex = history.banks.find((bank) => /american-express/i.test(bank.name));
+      const seed = amex
+        ? [amex.id, ...prioritized.filter((bank) => bank.id !== amex.id).map((bank) => bank.id)]
+        : prioritized.map((bank) => bank.id);
+      return seed.slice(0, 4);
     });
   }, [history]);
 
-  const competitorSeries = useMemo(() => {
+  const competitorSeries: LineSeries[] = useMemo(() => {
     if (!history) return [];
-    return selectedPeers
-      .map((id, index) => ({
-        id,
-        name: history.banks.find((bank) => bank.id === id)?.name ?? id,
-        color: COLORS[index % COLORS.length],
-        points: toSeries(history.series[id], minDate.getTime(), today.getTime()),
-      }))
-      .filter((entry) => entry.points.length > 1);
-  }, [history, selectedPeers, minDate, today]);
+    return selectedPeers.map((id, index) => ({
+      id,
+      label: history.banks.find((bank) => bank.id === id)?.name ?? id,
+      color: COLORS[(index + baselineSeries.length) % COLORS.length],
+      points: toSeries(history.series[id], minDate.getTime(), today.getTime()),
+    }));
+  }, [history, selectedPeers, baselineSeries.length, minDate, today]);
 
+  const allSeries = useMemo(() => [...baselineSeries, ...competitorSeries], [baselineSeries, competitorSeries]);
   const allDates = useMemo(() => {
     const set = new Set<number>();
-    [fedSeries, peerMedianSeries, peerP75Series, ...competitorSeries.map((series) => series.points)].forEach((series) =>
-      series.forEach((point) => set.add(point.date.getTime())),
-    );
+    allSeries.forEach((series) => series.points.forEach((point) => set.add(point.date.getTime())));
     return [...set].sort((a, b) => a - b).map((time) => new Date(time));
-  }, [competitorSeries, fedSeries, peerMedianSeries, peerP75Series]);
+  }, [allSeries]);
 
   const yValues = useMemo(() => {
     const values: number[] = [];
-    [fedSeries, peerMedianSeries, peerP75Series, ...competitorSeries.map((series) => series.points)].forEach((series) =>
-      series.forEach((point) => values.push(point.value)),
-    );
+    allSeries.forEach((series) => series.points.forEach((point) => values.push(point.value)));
     return values.length ? values : [0, 1];
-  }, [competitorSeries, fedSeries, peerMedianSeries, peerP75Series]);
+  }, [allSeries]);
 
-  const width = 900;
-  const height = 360;
+  const width = 920;
+  const height = 380;
   const margin = { top: 36, right: 28, bottom: 52, left: 80 };
   const innerWidth = width - margin.left - margin.right;
   const innerHeight = height - margin.top - margin.bottom;
@@ -113,8 +127,7 @@ const PeerComparisonChart = ({ macros, history }: Props) => {
   const yMin = Math.min(...yValues) - 0.25;
   const yMax = Math.max(...yValues) + 0.25;
 
-  const scaleX = (date: Date) =>
-    margin.left + ((date.getTime() - xMin) / Math.max(1, xMax - xMin)) * innerWidth;
+  const scaleX = (date: Date) => margin.left + ((date.getTime() - xMin) / Math.max(1, xMax - xMin)) * innerWidth;
   const scaleY = (value: number) => margin.top + (1 - (value - yMin) / Math.max(1, yMax - yMin)) * innerHeight;
 
   const buildPath = (points: SeriesPoint[]) =>
@@ -126,11 +139,16 @@ const PeerComparisonChart = ({ macros, history }: Props) => {
   const [showPeers, setShowPeers] = useState(true);
   const [hover, setHover] = useState<{ x: number; date: Date; entries: HoverEntry[] } | null>(null);
 
+  const togglePeer = (id: string) => {
+    setSelectedPeers((prev) => (prev.includes(id) ? prev.filter((peer) => peer !== id) : [...prev, id]));
+  };
+
   const handlePointer = (event: React.PointerEvent<SVGSVGElement>) => {
     if (!allDates.length) return;
-    const rect = (event.currentTarget as SVGSVGElement).getBoundingClientRect();
-    const x = event.clientX - rect.left - margin.left;
-    const ratio = Math.min(1, Math.max(0, x / innerWidth));
+    const rect = event.currentTarget.getBoundingClientRect();
+    const relativeX = event.clientX - rect.left - margin.left;
+    const clampedX = Math.min(innerWidth, Math.max(0, relativeX));
+    const ratio = innerWidth > 0 ? clampedX / innerWidth : 0;
     const target = xMin + ratio * (xMax - xMin);
     const nearest = allDates.reduce((prev, curr) =>
       Math.abs(curr.getTime() - target) < Math.abs(prev.getTime() - target) ? curr : prev,
@@ -139,52 +157,43 @@ const PeerComparisonChart = ({ macros, history }: Props) => {
     const entries: HoverEntry[] = [];
     const lookup = (series: SeriesPoint[]) => series.find((pt) => pt.date.getTime() === nearest.getTime())?.value ?? null;
 
-    if (showFed) entries.push({ label: "Fed effective rate", color: "#38bdf8", value: lookup(fedSeries) });
-    if (showPeers) {
-      entries.push({ label: "Peer median", color: "#34d399", value: lookup(peerMedianSeries) });
-      entries.push({ label: "Peer 75th", color: "#fbbf24", value: lookup(peerP75Series) });
-    }
-    competitorSeries.forEach((series) => {
-      entries.push({ label: series.name, color: series.color, value: lookup(series.points) });
+    allSeries.forEach((series) => {
+      const isBaselineFed = series.id === "fed";
+      const isBaselinePeer = series.id === "peer_median" || series.id === "peer_p75";
+      if (!showFed && isBaselineFed) return;
+      if (!showPeers && isBaselinePeer) return;
+      entries.push({ label: series.label, color: series.color, value: lookup(series.points) });
     });
 
     setHover({ x: scaleX(nearest), date: nearest, entries });
-  };
-
-  const handleLeave = () => setHover(null);
-
-  const togglePeer = (id: string) => {
-    setSelectedPeers((prev) => (prev.includes(id) ? prev.filter((peer) => peer !== id) : [...prev, id]));
   };
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-4 text-xs text-slate-300">
         <label className="inline-flex items-center gap-2">
-          <input type="checkbox" checked={showFed} onChange={(event) => setShowFed(event.target.checked)} />
-          Show Fed
+          <input type="checkbox" checked={showFed} onChange={(event) => setShowFed(event.target.checked)} /> Show Fed
         </label>
         <label className="inline-flex items-center gap-2">
-          <input type="checkbox" checked={showPeers} onChange={(event) => setShowPeers(event.target.checked)} />
-          Show peers (median &amp; p75)
+          <input type="checkbox" checked={showPeers} onChange={(event) => setShowPeers(event.target.checked)} /> Show peers
         </label>
       </div>
 
-      <div className="flex flex-wrap gap-3 text-xs text-slate-300">
-        <p className="uppercase tracking-wide text-slate-500">Peers</p>
+      <div className="flex flex-wrap gap-2 text-xs text-slate-300">
+        <p className="self-center text-[0.7rem] uppercase tracking-wide text-slate-500">Peers</p>
         <div className="flex flex-wrap gap-2">
           {(history?.banks ?? []).map((bank, index) => {
             const active = selectedPeers.includes(bank.id);
-            const color = COLORS[index % COLORS.length];
+            const color = COLORS[(index + baselineSeries.length) % COLORS.length];
             return (
               <button
                 key={bank.id}
                 type="button"
                 onClick={() => togglePeer(bank.id)}
-                className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 ${
+                className={`inline-flex items-center gap-2 rounded-full px-3 py-1 transition ${
                   active
-                    ? "border-transparent bg-slate-800 text-slate-100"
-                    : "border-slate-700 bg-slate-900 text-slate-500 hover:border-slate-600"
+                    ? "border border-transparent bg-slate-800 text-slate-50"
+                    : "border border-slate-700 bg-slate-900 text-slate-500 hover:border-slate-600 hover:text-slate-300"
                 }`}
               >
                 <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
@@ -205,16 +214,16 @@ const PeerComparisonChart = ({ macros, history }: Props) => {
             aria-label="Fed versus peers over ten years"
             className="h-auto w-full select-none"
             onPointerMove={handlePointer}
-            onPointerLeave={handleLeave}
+            onPointerLeave={() => setHover(null)}
           >
             <defs>
-              <linearGradient id="gridFill" x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0%" stopColor="rgba(15,23,42,0.9)" />
-                <stop offset="100%" stopColor="rgba(2,6,23,0.7)" />
+              <linearGradient id="chartBackground" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor="rgba(15,23,42,0.95)" />
+                <stop offset="100%" stopColor="rgba(2,6,23,0.8)" />
               </linearGradient>
             </defs>
             <rect x={0} y={0} width={width} height={height} fill="transparent" />
-            <rect x={margin.left} y={margin.top} width={innerWidth} height={innerHeight} rx={12} fill="url(#gridFill)" stroke="rgba(148,163,184,0.2)" />
+            <rect x={margin.left} y={margin.top} width={innerWidth} height={innerHeight} rx={12} fill="url(#chartBackground)" stroke="rgba(148,163,184,0.15)" />
 
             {Array.from({ length: 5 }).map((_, index) => {
               const value = yMin + ((yMax - yMin) / 4) * index;
@@ -244,26 +253,49 @@ const PeerComparisonChart = ({ macros, history }: Props) => {
               );
             })}
 
-            {showPeers && peerMedianSeries.length > 1 && (
-              <path d={buildPath(peerMedianSeries)} fill="none" stroke="#34d399" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" />
-            )}
-            {showPeers && peerP75Series.length > 1 && (
-              <path d={buildPath(peerP75Series)} fill="none" stroke="#fbbf24" strokeWidth={2} strokeDasharray="6 4" strokeLinecap="round" strokeLinejoin="round" />
-            )}
-            {showFed && fedSeries.length > 1 && (
-              <path d={buildPath(fedSeries)} fill="none" stroke="#38bdf8" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" />
-            )}
-            {competitorSeries.map((series) => (
-              <path
-                key={series.id}
-                d={buildPath(series.points)}
-                fill="none"
-                stroke={series.color}
-                strokeWidth={2.5}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            ))}
+            {allSeries.map((series) => {
+              const isFed = series.id === "fed";
+              const isPeerLine = series.id === "peer_median" || series.id === "peer_p75";
+              if (!showFed && isFed) return null;
+              if (!showPeers && isPeerLine) return null;
+
+              if (series.points.length > 1) {
+                return (
+                  <g key={series.id}>
+                    <path
+                      d={buildPath(series.points)}
+                      fill="none"
+                      stroke={series.color}
+                      strokeWidth={series.id === "peer_median" ? 3 : 2.5}
+                      strokeDasharray={series.dashed ? "6 4" : undefined}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    {series.points.map((point, index) => (
+                      <circle
+                        key={`${series.id}-${index}`}
+                        cx={scaleX(point.date)}
+                        cy={scaleY(point.value)}
+                        r={3}
+                        fill={series.color}
+                        opacity={0.7}
+                      />
+                    ))}
+                  </g>
+                );
+              }
+
+              return series.points.map((point, index) => (
+                <circle
+                  key={`${series.id}-${index}`}
+                  cx={scaleX(point.date)}
+                  cy={scaleY(point.value)}
+                  r={5}
+                  fill={series.color}
+                  opacity={0.7}
+                />
+              ));
+            })}
 
             {hover && (
               <g>
@@ -271,19 +303,19 @@ const PeerComparisonChart = ({ macros, history }: Props) => {
                 <rect
                   x={Math.min(hover.x + 16, width - 220)}
                   y={margin.top + 16}
-                  width={204}
-                  height={hover.entries.length * 18 + 40}
+                  width={210}
+                  height={hover.entries.length * 18 + 42}
                   rx={12}
-                  fill="rgba(15,23,42,0.95)"
+                  fill="rgba(15,23,42,0.96)"
                   stroke="rgba(148,163,184,0.2)"
                 />
-                <text x={Math.min(hover.x + 28, width - 208)} y={margin.top + 36} fill="#e2e8f0" fontSize={12} fontWeight={600}>
+                <text x={Math.min(hover.x + 28, width - 200)} y={margin.top + 36} fill="#e2e8f0" fontSize={12} fontWeight={600}>
                   {hover.date.toLocaleDateString()}
                 </text>
                 {hover.entries.map((entry, index) => (
                   <text
                     key={entry.label}
-                    x={Math.min(hover.x + 28, width - 208)}
+                    x={Math.min(hover.x + 28, width - 200)}
                     y={margin.top + 56 + index * 18}
                     fill={entry.color}
                     fontSize={11}
@@ -295,6 +327,21 @@ const PeerComparisonChart = ({ macros, history }: Props) => {
             )}
           </svg>
         )}
+      </div>
+
+      <div className="flex flex-wrap gap-4 text-[0.7rem] text-slate-400">
+        {baselineSeries.map((series) => (
+          <span key={series.id} className="inline-flex items-center gap-2">
+            <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: series.color }} />
+            {series.label}
+          </span>
+        ))}
+        {competitorSeries.map((series) => (
+          <span key={series.id} className="inline-flex items-center gap-2">
+            <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: series.color }} />
+            {series.label}
+          </span>
+        ))}
       </div>
     </div>
   );
