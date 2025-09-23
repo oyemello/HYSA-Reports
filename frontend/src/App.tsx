@@ -90,6 +90,16 @@ function App() {
         </header>
 
         <main className="mt-12 flex-1">
+          <section className="mb-8 flex flex-col items-center">
+            <iframe
+              src={dataUrl("fedrate/index.html")}
+              title="Federal Funds Rate Chart"
+              className="rounded-lg shadow-lg border border-slate-800 w-full"
+              style={{ minHeight: 520, maxWidth: 900 }}
+            />
+            <div className="text-xs text-slate-400 mt-2">Source: FRED, St. Louis Fed (Interactive)</div>
+          </section>
+          {/* --- DO NOT TOUCH ANYTHING BELOW THIS LINE --- */}
           <section className="overflow-hidden rounded-3xl bg-amex-white text-amex-blueDark shadow-2xl shadow-amex-blue/40">
             <div className="flex items-center justify-between border-b border-amex-blue/10 bg-amex-blue p-6 text-amex-white">
               <div>

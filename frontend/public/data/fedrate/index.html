@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Federal Funds Rate — Static Data</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1/dist/chartjs-adapter-luxon.umd.min.js"></script>
+  <style>
+    :root { --bg:#0b0f14; --panel:#121821; --text:#e8eef6; --muted:#9fb0c3; }
+    *{box-sizing:border-box} body{margin:0;font-family:system-ui,Segoe UI,Roboto,Arial;background:linear-gradient(180deg,#0a0e13,#0c121a 25%,#0b0f14);color:var(--text)}
+    .wrap{max-width:1080px;margin:24px auto;padding:0 16px}
+    h1{margin:0 0 8px;font-size:clamp(20px,2.6vw,28px)}
+    .card{border:1px solid #253246;background:var(--panel);border-radius:16px;padding:14px}
+    .sub{color:var(--muted);font-size:14px;margin-bottom:12px}
+    canvas{width:100%;height:520px}
+    .foot{margin-top:10px;font-size:12px;color:var(--muted)}
+    .badges{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0}
+    .badge{border:1px dashed #2d3c54;padding:6px 10px;border-radius:999px;font-size:12px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Federal Funds Rate — Effective & Target Range</h1>
+    <div class="sub">Rendered from a prebuilt JSON (no API key in browser). Hover to inspect values; shaded band shows the target range.</div>
+
+    <div class="card">
+      <div class="badges">
+        <span id="asOf" class="badge"></span>
+        <span class="badge">Source: FRED (DFF, DFEDTARU, DFEDTARL)</span>
+      </div>
+      <canvas id="chart"></canvas>
+      <div class="foot">Tip: re-run your Python builder to refresh <code>fed_data.json</code>; then refresh this page.</div>
+    </div>
+  </div>
+
+  <script>
+    const $ = sel => document.querySelector(sel);
+    const fmtPct = v => v == null ? "" : (Number(v).toFixed(2) + "%");
+
+    async function loadJSON() {
+      const res = await fetch("./fed_data.json", { cache: "no-store" });
+      if (!res.ok) throw new Error("Could not load fed_data.json");
+      return res.json();
+    }
+
+    function ds(label, arr, color, hidden=false) {
+      return {
+        label, hidden,
+        data: arr.map(p => ({ x: p.date, y: p.value })),
+        borderColor: color, backgroundColor: color,
+        borderWidth: 2, pointRadius: 0, tension: 0.15
+      };
+    }
+
+    function bandPlugin(up, lo) {
+      return {
+        id: "rangeBand",
+        afterDatasetsDraw(chart, args, opts) {
+          if (!up?.length || !lo?.length) return;
+          const { ctx, chartArea: a, scales } = chart;
+          ctx.save(); ctx.globalAlpha = 0.12; ctx.beginPath();
+          let started = false;
+          const toXY = p => ({
+            x: scales.x.getPixelForValue(p.x),
+            y: scales.y.getPixelForValue(p.y)
+          });
+          up.forEach((p,i) => {
+            const {x,y} = toXY(p);
+            if (!started) { ctx.moveTo(x,y); started = true; } else ctx.lineTo(x,y);
+          });
+          [...lo].reverse().forEach(p => {
+            const {x,y} = toXY(p);
+            ctx.lineTo(x,y);
+          });
+          ctx.closePath();
+          ctx.fillStyle = "#6aa6ff"; ctx.fill(); ctx.restore();
+        }
+      };
+    }
+
+    (async function main(){
+      try {
+        const data = await loadJSON();
+        const eff = data.series.effective.map(p => ({x:p.date, y:p.value}));
+        const up  = data.series.upper.map(p => ({x:p.date, y:p.value}));
+        const lo  = data.series.lower.map(p => ({x:p.date, y:p.value}));
+        $("#asOf").textContent = "Latest date: " + data.meta.latest_date;
+
+        const chart = new Chart($("#chart").getContext("2d"), {
+          type: "line",
+          data: {
+            datasets: [
+              ds("Effective (DFF)", eff, "#57d9a3"),
+              ds("Target Upper (DFEDTARU)", up, "#6aa6ff"),
+              ds("Target Lower (DFEDTARL)", lo, "#ffd166")
+            ]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            interaction: { mode: "nearest", intersect: false },
+            plugins: {
+              legend: { labels: { color: "#dbe6f4" } },
+              tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${fmtPct(ctx.parsed.y)}` } }
+            },
+            scales: {
+              x: { type: "time", time: { tooltipFormat: "yyyy-LL-dd" }, ticks: { color: "#9fb0c3" }, grid: { color: "rgba(255,255,255,0.07)" } },
+              y: { ticks: { color: "#9fb0c3", callback: v => v + "%" }, grid: { color: "rgba(255,255,255,0.07)" } }
+            }
+          },
+          plugins: [bandPlugin(up, lo)]
+        });
+      } catch (e) {
+        alert(e.message || String(e));
+        console.error(e);
+      }
+    })();
+  </script>
+</body>
+</html>
