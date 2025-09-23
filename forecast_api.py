@@ -33,8 +33,20 @@ AMEX APY: {institution_apy}
 Forecast: {forecast}
 """
     try:
-        response = model.generate_content(prompt)
-        return response.text.strip() if response.text else "(No summary generated)"
+        import threading
+        result = {}
+        def call_gemini():
+            try:
+                response = model.generate_content(prompt)
+                result['text'] = response.text.strip() if response.text else "(No summary generated)"
+            except Exception as e:
+                result['text'] = f"Gemini error: {e}"
+        t = threading.Thread(target=call_gemini)
+        t.start()
+        t.join(timeout=30)  # 30 second timeout
+        if t.is_alive():
+            return "Gemini summary timed out."
+        return result.get('text', '(No summary generated)')
     except Exception as e:
         return f"Gemini error: {e}"
 
