@@ -8,7 +8,7 @@ export default function ProfitabilityForecastResults() {
   useEffect(() => {
     setLoading(true);
     setError(null);
-    fetch("/api/forecast")
+    fetch(`${import.meta.env.BASE_URL}data/forecast.json`)
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
