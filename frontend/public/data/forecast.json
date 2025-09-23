@@ -1,35 +1,35 @@
 {
   "run_date": "2025-09-22",
-  "fred_vintage": "",
+  "fred_vintage": "2025-08-01",
   "inputs": {
     "FRED": {
       "FEDFUNDS": {
-        "value": null,
-        "date": ""
+        "value": 4.33,
+        "date": "2025-08-01"
       },
       "GS10": {
-        "value": null,
-        "date": ""
+        "value": 4.26,
+        "date": "2025-08-01"
       },
       "GS2": {
-        "value": null,
-        "date": ""
+        "value": 3.7,
+        "date": "2025-08-01"
       },
       "T10Y3M": {
-        "value": null,
-        "date": ""
+        "value": 0.15,
+        "date": "2025-09-22"
       },
       "CPIAUCSL": {
-        "value": null,
-        "date": ""
+        "value": 323.364,
+        "date": "2025-08-01"
       },
       "UNRATE": {
-        "value": null,
-        "date": ""
+        "value": 4.3,
+        "date": "2025-08-01"
       },
       "USREC": {
-        "value": null,
-        "date": ""
+        "value": 0.0,
+        "date": "2025-08-01"
       }
     },
     "competitor_apy": [
@@ -92,26 +92,26 @@
         12
       ],
       "balances": [
-        null,
-        null,
-        null
+        1000,
+        1020,
+        1040
       ],
       "cost_of_funds": [
-        null,
-        null,
-        null
+        4.33,
+        4.33,
+        4.33
       ],
       "nim": [
-        null,
-        null,
-        null
+        -0.07,
+        -0.07,
+        -0.07
       ],
       "profit": [
-        null,
-        null,
-        null
+        -0.18,
+        -0.36,
+        -0.73
       ]
     }
   },
-  "summary": "FRED data unavailable."
+  "summary": "Forecast uses GS10 (4.26%) as yield and FEDFUNDS (4.33%) as cost of funds. NIM = 4.26 - 4.33 = -0.07%. Profit is NIM% \u00d7 avg balance \u00d7 period."
 }
