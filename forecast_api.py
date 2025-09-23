@@ -81,3 +81,10 @@ def get_forecast():
         "summary": "This is a demo. Replace with real model output."
     }
     return forecast
+
+if __name__ == "__main__":
+    # Generate up-to-date forecast.json for static frontend use
+    output_path = os.path.join(os.path.dirname(__file__), "frontend", "public", "data", "forecast.json")
+    with open(output_path, "w") as f:
+        json.dump(get_forecast(), f, indent=2)
+    print(f"Wrote forecast to {output_path}")

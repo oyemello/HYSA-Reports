@@ -39,6 +39,9 @@ jobs:
           RESOLVE_BANK_LINKS: 'false'
         run: python scraper/scrape_hysa.py
 
+      - name: Generate profitability forecast
+        run: python forecast_api.py
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
