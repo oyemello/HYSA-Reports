@@ -206,74 +206,95 @@ function App() {
         </header>
 
         <main className="mt-12 flex-1 space-y-12">
-          <section className="overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/80 shadow-[0_30px_80px_-40px_rgba(15,23,42,0.75)]">
-            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 bg-slate-900/70 px-6 py-5">
+          <section className="overflow-hidden rounded-3xl bg-amex-white text-amex-blueDark shadow-2xl shadow-amex-blue/40">
+            <div className="flex items-center justify-between border-b border-amex-blue/10 bg-amex-blue p-6 text-amex-white">
               <div>
-                <h2 className="text-xl font-semibold text-slate-100">Featured Institutions</h2>
-                <p className="text-xs uppercase tracking-wide text-slate-500">
-                  Top 13 institutions by listed APY · Updated via NerdWallet
-                </p>
+                <h2 className="text-2xl font-semibold">Featured Institutions</h2>
+                <p className="text-sm text-amex-blueLight">Top 13 Institutions with Highest APYs</p>
               </div>
-              <span className="rounded-full border border-slate-700 bg-slate-800/70 px-4 py-1 text-xs font-medium text-slate-300">
-                {fetchState === "success" ? `${sortedRecords.length} institutions` : "Refreshing"}
+              <span className="rounded-full bg-amex-white/20 px-4 py-2 text-sm font-medium">
+                Updated via NerdWallet
               </span>
             </div>
 
             {fetchState === "loading" && (
-              <div className="p-8 text-center text-slate-400">Fetching the latest rates…</div>
+              <div className="p-8 text-center text-amex-blue">Fetching the latest rates…</div>
             )}
 
             {fetchState === "error" && (
-              <div className="p-8 text-center text-rose-400">
-                Unable to load data. {errorMessage}
-              </div>
+              <div className="p-8 text-center text-red-600">Unable to load data. {errorMessage}</div>
             )}
 
             {fetchState === "success" && (
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-slate-800 text-sm text-slate-200">
-                  <thead className="bg-slate-900/70 text-xs uppercase tracking-wide text-slate-400">
+                <table className="min-w-full divide-y divide-amex-blue/10 text-sm">
+                  <thead className="bg-amex-blue text-amex-white">
                     <tr>
-                      <th scope="col" className="px-6 py-3 text-left">Institution</th>
-                      <th scope="col" className="px-6 py-3 text-left">APY</th>
-                      <th scope="col" className="px-6 py-3 text-left">Link</th>
-                      <th scope="col" className="px-6 py-3 text-left">Verified</th>
+                      <th scope="col" className="px-6 py-4 text-left font-medium uppercase tracking-wide">
+                        Institution
+                      </th>
+                      <th scope="col" className="px-6 py-4 text-left font-medium uppercase tracking-wide">
+                        APY
+                      </th>
+                      <th scope="col" className="px-6 py-4 text-left font-medium uppercase tracking-wide">
+                        Link
+                      </th>
+                      <th scope="col" className="px-6 py-4 text-left font-medium uppercase tracking-wide">
+                        Verified
+                      </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800">
+                  <tbody className="divide-y divide-amex-blue/10">
                     {sortedRecords.map((record) => (
-                      <tr key={`${record.institution}-${record.apy}`} className="bg-slate-900/60 transition hover:bg-slate-900">
-                        <td className="px-6 py-3 text-sm font-medium text-slate-100">{record.institution}</td>
-                        <td className="px-6 py-3 text-sm font-semibold text-slate-200">{record.apy}</td>
-                        <td className="px-6 py-3 text-sm">
+                      <tr key={`${record.institution}-${record.apy}`} className="hover:bg-amex-blueLight/40">
+                        <td className="px-6 py-4 text-base font-medium">{record.institution}</td>
+                        <td className="px-6 py-4 text-base font-semibold">{record.apy}</td>
+                        <td className="px-6 py-4 text-base">
                           {(() => {
                             const verifiedBank = record.double_check === true && record.bank_link;
                             const fallback = record.nerdwallet_link || record.link || null;
                             const href = (verifiedBank || fallback) as string | null;
-                            if (!href) return <span className="text-slate-500">Not provided</span>;
+                            if (!href) return <span className="text-sm text-amex-blueDark/70">Not provided</span>;
                             return (
                               <a
                                 href={href}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="inline-flex items-center gap-2 text-sky-300 transition hover:text-sky-100"
+                                className="inline-flex items-center gap-2 font-medium text-amex-blue hover:text-amex-blueDark"
                               >
                                 {verifiedBank ? "Visit bank" : "View source"}
-                                <span aria-hidden>↗</span>
+                                <svg
+                                  className="h-4 w-4"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  aria-hidden
+                                >
+                                  <path d="M7 17l10-10" />
+                                  <path d="M7 7h10v10" />
+                                </svg>
                               </a>
                             );
                           })()}
                         </td>
-                        <td className="px-6 py-3 text-sm text-slate-300">
-                          <span className="inline-flex items-center gap-2" title={record.fact_check_notes ?? statusLabel(record.double_check)}>
+                        <td className="px-6 py-4 text-base">
+                          <span className="inline-flex items-center" title={record.fact_check_notes ?? statusLabel(record.double_check)}>
                             <DoubleCheckIcon value={record.double_check} />
-                            <span className="hidden text-xs text-slate-500 sm:inline">{statusLabel(record.double_check)}</span>
                           </span>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+
+            {fetchState === "success" && sortedRecords.length === 0 && (
+              <div className="p-8 text-center text-amex-blue">
+                No accounts were extracted. Run the scraper to populate fresh data.
               </div>
             )}
           </section>
