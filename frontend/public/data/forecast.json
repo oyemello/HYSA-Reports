@@ -92,26 +92,26 @@
         12
       ],
       "balances": [
-        1000,
-        1020,
-        1050
+        null,
+        null,
+        null
       ],
       "cost_of_funds": [
-        4.46,
-        4.41,
-        4.36
+        null,
+        null,
+        null
       ],
       "nim": [
-        1.1,
-        1.05,
-        1.0
+        null,
+        null,
+        null
       ],
       "profit": [
-        12,
-        24,
-        48
+        null,
+        null,
+        null
       ]
     }
   },
-  "summary": "This is a demo. Replace with real model output."
+  "summary": "FRED data unavailable."
 }
