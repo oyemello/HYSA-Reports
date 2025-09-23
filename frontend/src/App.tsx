@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import ProfitabilityForecastResults from "./ProfitabilityForecastResults";
 
 // PeerComparisonChart removed; app shows only Featured Institutions table.
 
@@ -182,6 +183,8 @@ function App() {
             )}
           </section>
         </main>
+
+        <ProfitabilityForecastResults />
 
         <footer className="mt-10 text-center text-xs text-amex-blueLight">
           American Express Internal Tool. Data generated via Firecrawl scraping &amp; Gemini fact checking. Refresh after rerunning the scraper.
