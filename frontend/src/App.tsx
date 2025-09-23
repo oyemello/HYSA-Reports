@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import ProfitabilityForecastResults from "./ProfitabilityForecastResults";
 
 // PeerComparisonChart removed; app shows only Featured Institutions table.
 
@@ -57,6 +56,20 @@ function App() {
   const [fetchState, setFetchState] = useState<FetchState>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Find APY and federal rate from forecast.json
+  const [apy, setApy] = useState<number | null>(null);
+  const [fedRate, setFedRate] = useState<number | null>(null);
+
+  useEffect(() => {
+    fetch(dataUrl("data/forecast.json"), { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        if (!json) return;
+        setApy(json.inputs?.institution_apy ?? null);
+        setFedRate(json.inputs?.FRED?.FEDFUNDS?.value ?? null);
+      });
+  }, []);
+
   useEffect(() => {
     const fetchSnapshot = async () => {
       setFetchState("loading");
@@ -84,6 +97,18 @@ function App() {
       <div className="mx-auto flex min-h-screen max-w-6xl flex-col px-6 py-16">
         <header className="text-center">
           <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">AMEX HYSA APY Navigator</h1>
+          <div className="mt-4 flex flex-col sm:flex-row items-center justify-center gap-4">
+            {apy !== null && (
+              <span className="inline-block rounded bg-amex-blue text-amex-white px-4 py-2 font-semibold text-lg">
+                American Express APY: {apy.toFixed(2)}%
+              </span>
+            )}
+            {fedRate !== null && (
+              <span className="inline-block rounded bg-slate-800 text-amex-blue px-4 py-2 font-semibold text-lg">
+                Federal Rate: {fedRate.toFixed(2)}%
+              </span>
+            )}
+          </div>
           <p className="mt-4 text-lg text-amex-blueLight">
             Generates HYSA APY Reports by comparing with other financial institutions.
           </p>
@@ -183,8 +208,6 @@ function App() {
             )}
           </section>
         </main>
-
-        <ProfitabilityForecastResults />
 
         <footer className="mt-10 text-center text-xs text-amex-blueLight">
           American Express Internal Tool. Data generated via Firecrawl scraping &amp; Gemini fact checking. Refresh after rerunning the scraper.
