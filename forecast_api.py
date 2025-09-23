@@ -30,8 +30,15 @@ def get_forecast():
         }
         resp = requests.get(FRED_BASE, params=params)
         obs = resp.json().get("observations", [{}])[0]
+        obs_value = obs.get("value", "nan")
+        try:
+            value = float(obs_value)
+            if value != value:  # NaN check
+                value = None
+        except Exception:
+            value = None
         fred_data[series_id] = {
-            "value": float(obs.get("value", "nan")),
+            "value": value,
             "date": obs.get("date", "")
         }
 

@@ -1,0 +1,117 @@
+{
+  "run_date": "2025-09-22",
+  "fred_vintage": "",
+  "inputs": {
+    "FRED": {
+      "FEDFUNDS": {
+        "value": null,
+        "date": ""
+      },
+      "GS10": {
+        "value": null,
+        "date": ""
+      },
+      "GS2": {
+        "value": null,
+        "date": ""
+      },
+      "T10Y3M": {
+        "value": null,
+        "date": ""
+      },
+      "CPIAUCSL": {
+        "value": null,
+        "date": ""
+      },
+      "UNRATE": {
+        "value": null,
+        "date": ""
+      },
+      "USREC": {
+        "value": null,
+        "date": ""
+      }
+    },
+    "competitor_apy": [
+      {
+        "institution": "Axos Bank",
+        "apy": 4.46
+      },
+      {
+        "institution": "Openbank by Santander",
+        "apy": 4.2
+      },
+      {
+        "institution": "Forbright Bank",
+        "apy": 4.25
+      },
+      {
+        "institution": "Western Alliance Bank",
+        "apy": 4.25
+      },
+      {
+        "institution": "E*TRADE",
+        "apy": 4.0
+      },
+      {
+        "institution": "Synchrony Bank",
+        "apy": 3.8
+      },
+      {
+        "institution": "Discover\u00ae Bank",
+        "apy": 3.5
+      },
+      {
+        "institution": "Marcus by Goldman Sachs",
+        "apy": 3.65
+      },
+      {
+        "institution": "SoFi",
+        "apy": 3.8
+      },
+      {
+        "institution": "Capital One",
+        "apy": 3.5
+      },
+      {
+        "institution": "Barclays",
+        "apy": 3.9
+      },
+      {
+        "institution": "UFB Direct",
+        "apy": 3.9
+      }
+    ],
+    "institution_apy": 4.46
+  },
+  "forecast": {
+    "base": {
+      "months": [
+        3,
+        6,
+        12
+      ],
+      "balances": [
+        1000,
+        1020,
+        1050
+      ],
+      "cost_of_funds": [
+        4.46,
+        4.41,
+        4.36
+      ],
+      "nim": [
+        1.1,
+        1.05,
+        1.0
+      ],
+      "profit": [
+        12,
+        24,
+        48
+      ]
+    }
+  },
+  "summary": "This is a demo. Replace with real model output."
+}
