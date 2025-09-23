@@ -1,4 +1,17 @@
 import { useEffect, useState } from "react";
+import { Line } from "react-chartjs-2";
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+} from "chart.js";
+
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
 export default function ProfitabilityForecastResults() {
   const [data, setData] = useState<any>(null);
@@ -68,6 +81,33 @@ export default function ProfitabilityForecastResults() {
     }
   }
 
+  // Prepare chart data if available
+  let chartData = null;
+  if (data.forecast && data.forecast.base) {
+    const months = data.forecast.base.months || [3, 6, 12];
+    chartData = {
+      labels: months.map((m: number) => `${m} mo`),
+      datasets: [
+        {
+          label: "Profit ($)",
+          data: data.forecast.base.profit,
+          borderColor: "#006FCF",
+          backgroundColor: "rgba(0,111,207,0.2)",
+          tension: 0.3,
+          fill: true,
+        },
+        {
+          label: "NIM (%)",
+          data: data.forecast.base.nim,
+          borderColor: "#F59E42",
+          backgroundColor: "rgba(245,158,66,0.1)",
+          yAxisID: 'y1',
+          tension: 0.3,
+        },
+      ],
+    };
+  }
+
   return (
     <section className="mt-16" id="profitability-forecast-results">
       <h2 className="text-2xl font-bold mb-4">Profitability Forecast Results</h2>
@@ -76,6 +116,30 @@ export default function ProfitabilityForecastResults() {
           {JSON.stringify(data, null, 2)}
         </pre>
       </div>
+      {chartData && (
+        <div className="mb-8">
+          <h3 className="text-xl font-semibold mb-2">Forecast Line Chart</h3>
+          <Line
+            data={chartData}
+            options={{
+              responsive: true,
+              plugins: {
+                legend: { position: "top" },
+                title: { display: false },
+              },
+              scales: {
+                y: { title: { display: true, text: 'Profit ($)' } },
+                y1: {
+                  position: 'right',
+                  title: { display: true, text: 'NIM (%)' },
+                  grid: { drawOnChartArea: false },
+                },
+              },
+            }}
+            height={300}
+          />
+        </div>
+      )}
       {data.summary && (
         <div className="mb-6">
           <h3 className="text-xl font-semibold mb-2">Executive Summary</h3>
