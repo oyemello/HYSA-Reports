@@ -14,6 +14,7 @@ from firecrawl import Firecrawl
 from firecrawl.v2.types import ExtractResponse
 from bs4 import BeautifulSoup
 import re
+import requests
 from urllib.parse import parse_qs, urlparse, unquote
 from google.generativeai import GenerativeModel, configure
 
@@ -26,6 +27,18 @@ DEFAULT_DATA_PATH = os.path.join(
     "data",
     "hysa_accounts.json",
 )
+
+FEATURED_RECORD_LIMIT = 13
+BAD_INSTITUTION_CHARS = {"|", "\n"}
+INVALID_INSTITUTION_SUBSTRINGS = (
+    "what is ",
+    "what are ",
+    "how much ",
+    "nerdwallet's best",
+    "learn more",
+    "bank/institution",
+)
+VALID_REVIEW_PREFIX = "https://www.nerdwallet.com/reviews/banking/"
 
 EXTRACTION_SCHEMA = {
     "type": "object",
@@ -93,6 +106,8 @@ EXACT_NOISE = {
     "youtube",
 }
 
+APY_VALUE_RE = re.compile(r"(\d+(?:\.\d{1,3})?)")
+
 LINK_KEYWORDS = ("savings", "apy", "rate", "yield", "high")
 CONTEXT_KEYWORDS = (
     "apy",
@@ -159,17 +174,88 @@ def ensure_output_directory(path: str) -> None:
     os.makedirs(directory, exist_ok=True)
 
 
-def load_credentials() -> tuple[str, Optional[str]]:
+def load_credentials(require_firecrawl: bool = False) -> tuple[Optional[str], Optional[str]]:
     """Load Firecrawl and Gemini credentials from the environment."""
     load_dotenv()
     firecrawl_key = os.getenv("FIRECRAWL_API_KEY")
-    if not firecrawl_key:
+    if require_firecrawl and not firecrawl_key:
         raise RuntimeError("FIRECRAWL_API_KEY is required to run the scraper.")
     gemini_key = os.getenv("GEMINI_API_KEY")
     return firecrawl_key, gemini_key
 
 
-def scrape_accounts(client: Firecrawl) -> List[AccountRecord]:
+def scrape_accounts_direct(url: str = TARGET_URL) -> List[AccountRecord]:
+    """Scrape the NerdWallet roundup table via direct HTTP request."""
+    try:
+        resp = requests.get(
+            url,
+            timeout=30,
+            headers={
+                "User-Agent": "Mozilla/5.0 (compatible; HYSA-Navigator/1.0)"
+            },
+        )
+        resp.raise_for_status()
+    except Exception as exc:
+        print(f"[HYSA] Direct fetch failed: {exc}")
+        return []
+
+    soup = BeautifulSoup(resp.text, "html.parser")
+    table = soup.find("table")
+    if not table:
+        print("[HYSA] Direct fetch did not contain a summary table")
+        return []
+
+    records: List[AccountRecord] = []
+    for tr in table.find_all("tr"):
+        cells = tr.find_all("td")
+        if len(cells) < 3:
+            continue
+        name_tag = cells[0].find("p") or cells[0]
+        institution = normalise_institution(name_tag.get_text(" ", strip=True))
+        if not institution:
+            continue
+        apy_tag = cells[2].find("span")
+        apy = clean_text(apy_tag.get_text(" ", strip=True) if apy_tag else cells[2].get_text(" ", strip=True))
+        if not apy:
+            continue
+        review_link = None
+        for a in cells[1].find_all("a", href=True):
+            href = a["href"].strip()
+            if href.startswith(VALID_REVIEW_PREFIX):
+                review_link = href
+                break
+        if not review_link:
+            # Try locating a review link elsewhere in the row
+            for a in tr.find_all("a", href=True):
+                href = a["href"].strip()
+                if href.startswith(VALID_REVIEW_PREFIX):
+                    review_link = href
+                    break
+        if not review_link:
+            continue
+        records.append(
+            AccountRecord(
+                institution=institution,
+                apy=apy,
+                nerdwallet_link=review_link,
+            )
+        )
+        if len(records) >= FEATURED_RECORD_LIMIT:
+            break
+    if not records:
+        print("[HYSA] Direct scrape parsed zero records")
+    return records
+
+
+def scrape_accounts(client: Optional[Firecrawl]) -> List[AccountRecord]:
+    direct_records = scrape_accounts_direct()
+    if direct_records:
+        print(f"[HYSA] Direct scrape captured {len(direct_records)} institutions")
+        return direct_records
+
+    if client is None:
+        raise RuntimeError("Direct scrape failed and Firecrawl client is unavailable.")
+
     response: ExtractResponse = client.extract(
         urls=[TARGET_URL],
         schema=EXTRACTION_SCHEMA,
@@ -203,7 +289,16 @@ def scrape_accounts(client: Firecrawl) -> List[AccountRecord]:
 
     if not records:
         raise RuntimeError("No valid account records parsed from Firecrawl response.")
-    return records
+
+    featured = select_featured_accounts(records)
+    if len(featured) < FEATURED_RECORD_LIMIT:
+        relaxed = select_featured_accounts(records, strict=False)
+        print(
+            f"[HYSA] Structured extract yielded {len(featured)} strict matches; "
+            f"using relaxed filtering with {len(relaxed)} candidates"
+        )
+        return relaxed
+    return featured
 
 
 def scrape_accounts_fallback(client: Firecrawl) -> List[AccountRecord]:
@@ -344,11 +439,79 @@ def scrape_accounts_fallback(client: Firecrawl) -> List[AccountRecord]:
     if not records:
         raise RuntimeError("Fallback parser could not identify any APY entries.")
 
-    return records
+    return select_featured_accounts(records)
 
 
 def canonicalize(text: str) -> str:
     return re.sub(r"[^a-z0-9]", "", (text or "").lower())
+
+
+def apy_to_float(value: Optional[str]) -> float:
+    if not value:
+        return float("-inf")
+    cleaned = value.replace(",", " ")
+    match = APY_VALUE_RE.search(cleaned)
+    if not match:
+        return float("-inf")
+    try:
+        return float(match.group(1))
+    except ValueError:
+        return float("-inf")
+
+
+def looks_like_featured(record: AccountRecord) -> bool:
+    inst = (record.institution or "").strip()
+    if not inst:
+        return False
+    lower = inst.lower()
+    if any(bad in inst for bad in BAD_INSTITUTION_CHARS):
+        return False
+    if any(term in lower for term in INVALID_INSTITUTION_SUBSTRINGS):
+        return False
+    if len(inst) > 60:
+        return False
+    if inst.count(" ") >= 6:
+        return False
+    link = (record.nerdwallet_link or "").strip()
+    if not link or not link.startswith(VALID_REVIEW_PREFIX):
+        return False
+    # Require a percent sign to avoid stray copy decks
+    if "%" not in (record.apy or ""):
+        return False
+    return True
+
+
+def select_featured_accounts(
+    records: List[AccountRecord],
+    limit: int = FEATURED_RECORD_LIMIT,
+    *,
+    strict: bool = True,
+) -> List[AccountRecord]:
+    if limit <= 0:
+        return records
+
+    seen: dict[str, AccountRecord] = {}
+    order: List[str] = []
+    filtered = [r for r in records if looks_like_featured(r)] if strict else list(records)
+    for record in filtered:
+        key = canonicalize(record.institution)
+        if not key:
+            continue
+        if key not in seen:
+            seen[key] = record
+            order.append(key)
+            continue
+        existing = seen[key]
+        if apy_to_float(record.apy) > apy_to_float(existing.apy):
+            seen[key] = record
+
+    trimmed = [seen[key] for key in order[:limit]]
+    if trimmed and len(trimmed) < len(records):
+        print(
+            f"[HYSA] Trimmed featured list to {len(trimmed)} institutions "
+            f"(from {len(records)} scraped, {len(filtered)} after filtering)"
+        )
+    return trimmed if trimmed else filtered if filtered else records
 
 
 BLOCKED_HOSTS = {
@@ -645,13 +808,15 @@ def save_records(records: List[AccountRecord], path: Optional[str] = None) -> No
 
 def run() -> None:
     firecrawl_key, gemini_key = load_credentials()
-    client = Firecrawl(api_key=firecrawl_key)
+    client = Firecrawl(api_key=firecrawl_key) if firecrawl_key else None
     records = scrape_accounts(client)
     # Resolve bank_link without Playwright: decode redirects, scrape anchors, then search fallback
     for rec in records:
-        bank = resolve_bank_link_from_review(rec.nerdwallet_link, rec.institution, client)
-        if not bank:
-            bank = resolve_bank_link_by_search(rec.institution, client)
+        bank = None
+        if client:
+            bank = resolve_bank_link_from_review(rec.nerdwallet_link, rec.institution, client)
+            if not bank:
+                bank = resolve_bank_link_by_search(rec.institution, client)
         rec.bank_link = bank
     fact_check_accounts(records, gemini_key)
     save_records(records)
