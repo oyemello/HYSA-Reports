@@ -10,12 +10,33 @@ import json
 from datetime import datetime
 from typing import List, Dict, Any
 import requests
+from google.generativeai import GenerativeModel, configure
 
 FRED_API_KEY = os.getenv("FRED_API_KEY")
 FRED_SERIES = [
     "FEDFUNDS", "GS10", "GS2", "T10Y3M", "CPIAUCSL", "UNRATE", "USREC"
 ]
 FRED_BASE = "https://api.stlouisfed.org/fred/series/observations"
+
+def get_gemini_summary(fred_data, competitor_apy, institution_apy, forecast):
+    gemini_key = os.getenv("GEMINI_API_KEY")
+    if not gemini_key:
+        return "Gemini API key not set."
+    configure(api_key=gemini_key)
+    model = GenerativeModel("gemini-1.5-flash")
+    prompt = f"""
+You are an expert financial analyst. Summarize the following HYSA profitability forecast for an executive audience at American Express. Highlight the key macro drivers (FEDFUNDS, GS10), the current APY landscape, and the projected profitability for American Express compared to the federal funds rate scenario. Use clear, concise business language.
+
+FRED data: {fred_data}
+Competitor APY: {competitor_apy}
+AMEX APY: {institution_apy}
+Forecast: {forecast}
+"""
+    try:
+        response = model.generate_content(prompt)
+        return response.text.strip() if response.text else "(No summary generated)"
+    except Exception as e:
+        return f"Gemini error: {e}"
 
 def get_forecast():
     # 1. Fetch FRED data
@@ -103,7 +124,14 @@ def get_forecast():
                 "profit": profit
             }
         },
-        "summary": summary
+        # Use Gemini to generate summary
+        "summary": get_gemini_summary(fred_data, competitor_apy, institution_apy, {
+            "months": [3, 6, 12],
+            "balances": balances,
+            "cost_of_funds": [fedfunds]*3 if fedfunds is not None else [None]*3,
+            "nim": nim,
+            "profit": profit
+        })
     }
     return forecast
 
