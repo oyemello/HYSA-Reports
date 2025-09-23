@@ -14,6 +14,27 @@ SERIES = {
 }
 
 # -------- helpers --------
+def compress_series(points: list[dict[str, float]]) -> list[dict[str, float]]:
+    if not points:
+        return points
+
+    compressed: list[dict[str, float]] = [points[0]]
+    prev = points[0]
+    for current in points[1:]:
+        if current["value"] == prev["value"]:
+            prev = current
+            continue
+        if compressed[-1]["date"] != prev["date"]:
+            compressed.append(prev)
+        compressed.append(current)
+        prev = current
+
+    last = points[-1]
+    if compressed[-1]["date"] != last["date"]:
+        compressed.append(last)
+    return compressed
+
+
 def fred_series(series_id: str, api_key: str, start: str | None, end: str | None):
     params = {
         "series_id": series_id,
@@ -32,7 +53,7 @@ def fred_series(series_id: str, api_key: str, start: str | None, end: str | None
         if v == ".":
             continue
         out.append({"date": o["date"][:10], "value": float(v)})
-    return out
+    return compress_series(out)
 
 def build_html():
     # Minimal Chart.js page that loads dist/fed_data.json placed next to it
@@ -83,16 +104,17 @@ def build_html():
       return res.json();
     }
 
-    function ds(label, arr, color, hidden=false) {
+    function ds(label, arr, color, hidden=false, stepped=false) {
       return {
-        label, hidden,
-        data: arr,
+        label,
+        hidden,
+        data: arr.map(p => ({ x: p.date, y: p.value })),
         borderColor: color,
         backgroundColor: color,
         borderWidth: 2,
         pointRadius: 0,
         tension: 0.15,
-        parsing: false
+        stepped
       };
     }
 
@@ -125,9 +147,9 @@ def build_html():
     (async function main(){
       try {
         const data = await loadJSON();
-        const eff = data.series.effective.map(p => ({x:p.date, y:p.value}));
-        const up  = data.series.upper.map(p => ({x:p.date, y:p.value}));
-        const lo  = data.series.lower.map(p => ({x:p.date, y:p.value}));
+        const eff = data.series.effective;
+        const up  = data.series.upper;
+        const lo  = data.series.lower;
         $("#asOf").textContent = "Latest date: " + data.meta.latest_date;
 
         const chart = new Chart($("#chart").getContext("2d"), {
@@ -135,8 +157,8 @@ def build_html():
           data: {
             datasets: [
               ds("Effective (DFF)", eff, "#57d9a3"),
-              ds("Target Upper (DFEDTARU)", up, "#6aa6ff"),
-              ds("Target Lower (DFEDTARL)", lo, "#ffd166")
+              ds("Target Upper (DFEDTARU)", up, "#6aa6ff", false, true),
+              ds("Target Lower (DFEDTARL)", lo, "#ffd166", false, true)
             ]
           },
           options: {
@@ -147,7 +169,18 @@ def build_html():
               tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${fmtPct(ctx.parsed.y)}` } }
             },
             scales: {
-              x: { type: "time", time: { tooltipFormat: "yyyy-LL-dd" }, ticks: { color: "#9fb0c3" }, grid: { color: "rgba(255,255,255,0.07)" } },
+              x: {
+                type: "time",
+                time: {
+                  unit: "year",
+                  tooltipFormat: "yyyy-LL-dd",
+                  displayFormats: { year: "yyyy" }
+                },
+                ticks: {
+                  color: "#9fb0c3"
+                },
+                grid: { color: "rgba(255,255,255,0.07)" }
+              },
               y: { ticks: { color: "#9fb0c3", callback: v => v + "%" }, grid: { color: "rgba(255,255,255,0.07)" } }
             }
           },
