@@ -7,22 +7,14 @@
     "dev": "vite",
     "build": "tsc -b tsconfig.app.json && vite build",
     "lint": "eslint .",
-    "preview": "vite preview",
-    "macro": "tsx scripts/export-macro.ts",
-    "peers": "tsx scripts/build-peers-json.ts",
-    "forecast": "tsx scripts/run-gemini-forecast.ts",
-    "scenarios": "tsx scripts/build-scenarios.ts",
-    "narrative": "tsx scripts/run-gemini-narrative.ts"
+    "preview": "vite preview"
   },
   "dependencies": {
-    "dotenv": "^16.4.5",
     "react": "^19.1.1",
-    "react-dom": "^19.1.1",
-    "zod": "^4.1.11"
+    "react-dom": "^19.1.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.36.0",
-    "@types/node": "^22.10.2",
     "@types/react": "^19.1.13",
     "@types/react-dom": "^19.1.9",
     "@vitejs/plugin-react": "^5.0.3",
@@ -33,7 +25,6 @@
     "globals": "^16.4.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.17",
-    "tsx": "^4.19.2",
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.44.0",
     "vite": "^7.1.7"
