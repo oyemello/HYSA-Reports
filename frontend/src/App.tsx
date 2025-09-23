@@ -105,7 +105,7 @@ function App() {
             )}
             {fedRate !== null && (
               <span className="inline-block rounded bg-slate-800 text-amex-blue px-4 py-2 font-semibold text-lg">
-                Federal Rate: {fedRate.toFixed(2)}%
+                Federal Funds Rate (FRED): {fedRate.toFixed(2)}%
               </span>
             )}
           </div>
