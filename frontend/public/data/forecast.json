@@ -85,7 +85,7 @@
     "institution_apy": 4.46
   },
   "forecast": {
-    "base": {
+    "federal_rate": {
       "months": [
         3,
         6,
@@ -111,7 +111,34 @@
         -0.36,
         -0.73
       ]
+    },
+    "amex": {
+      "months": [
+        3,
+        6,
+        12
+      ],
+      "balances": [
+        1000,
+        1020,
+        1040
+      ],
+      "cost_of_funds": [
+        4.46,
+        4.46,
+        4.46
+      ],
+      "nim": [
+        -0.2,
+        -0.2,
+        -0.2
+      ],
+      "profit": [
+        -0.5,
+        -1.02,
+        -2.08
+      ]
     }
   },
-  "summary": "American Express HYSA Profitability Forecast: August 2025\n\n**Executive Summary:**\n\nThis forecast projects a net interest margin (NIM) loss for American Express's High-Yield Savings Account (HYSA) despite a competitive APY.  While our 4.46% APY is currently in line with top market competitors (e.g., Axos Bank at 4.46%),  the prevailing macroeconomic environment presents challenges.  The current elevated Federal Funds Rate (FEDFUNDS) at 4.33% and a 10-year Treasury yield (GS10) of 4.26% necessitate a significant increase in our cost of funds, resulting in projected net losses.\n\n**Key Macro Drivers:**\n\n* **High Interest Rate Environment:**  The elevated FEDFUNDS rate (4.33%) directly impacts our cost of funds, squeezing profitability despite competitive APYs.  The relatively high GS10 (4.26%) reflects the overall cost of borrowing and contributes to pressure on margins.\n\n* **Competitive Landscape:** The HYSA market is fiercely competitive, with several institutions offering APYs exceeding 4% (Axos Bank, Openbank, Forbright Bank leading the pack).  Maintaining a competitive APY requires a careful balance between customer acquisition and profitability.\n\n**Profitability Projection:**\n\nOur forecast shows consistent NIM losses (-0.07% per month) and escalating net losses across various time horizons (-$0.18, -$0.36, and -$0.73 for 3, 6, and 12 months, respectively) assuming current balance projections. This scenario assumes a fixed cost of funds mirroring the current FEDFUNDS rate.\n\n**Recommendations:**\n\nWe must critically evaluate the following to improve HYSA profitability:\n\n1. **Cost of Funds Management:** Explore strategies to reduce the cost of funds, including diversifying funding sources and optimizing deposit mix.\n\n2. **Pricing Strategy:** Analyze the APY landscape and competitor offerings to determine the optimal balance between competitiveness and profitability. A slight reduction in APY could significantly improve margins.\n\n3. **Balance Growth Strategy:**  Implement strategies to increase HYSA account balances significantly.  Growth in deposits will be essential for offsetting the impact of the high cost of funds.\n\n4. **Fee Structure:**  Explore potential revenue generation through minimal, clearly communicated fees while maintaining customer satisfaction.\n\nIn conclusion, while maintaining a competitive APY is crucial, the current macro environment requires a strategic review of our HYSA strategy to achieve profitability. Immediate actions are required to mitigate the projected losses."
+  "summary": "American Express High-Yield Savings Account (HYSA) Profitability Forecast: August 2025\n\n**Executive Summary:**  Current macroeconomic conditions, characterized by a Federal Funds rate (FEDFUNDS) of 4.33% and a 10-year Treasury yield (GS10) of 4.26%, present a challenging environment for HYSA profitability.  While American Express (AMEX) is matching the highest competitor APY at 4.46%,  our forecast indicates negative net interest margins (NIM) and profitability, exceeding losses compared to a scenario mirroring the Federal Funds Rate.  This necessitates a strategic review of our HYSA strategy.\n\n**Macroeconomic Drivers:**  The prevailing high interest rate environment, reflected in both FEDFUNDS and GS10, increases the cost of funds.  This directly impacts HYSA profitability as we are paying a higher rate to depositors than we are earning.  The current unemployment rate (UNRATE) of 4.3% suggests a still-strong economy, yet the potential for economic slowdown cannot be ignored.\n\n**Competitive Landscape:** The current APY landscape is highly competitive.  Several institutions offer APYs between 3.5% and 4.46%, putting significant pressure on margins.  AMEX\u2019s current 4.46% APY, while competitive, is not sufficient to offset the cost of funds given our current structure.\n\n**Profitability Projection:** Our forecast reveals concerning profitability for the AMEX HYSA.  Matching the highest competitor rate results in a widening negative NIM of -0.2% across all forecast horizons (3, 6, and 12 months).  This translates to accumulating losses of -$0.5, -$1.02, and -$2.08 million for the respective periods, significantly exceeding the losses under a Federal Funds rate-mirrored cost of funds (-$0.18, -$0.36, and -$0.73 million).\n\n**Recommendations:** We recommend an immediate review of our HYSA pricing strategy, cost of funds, and overall product positioning to mitigate these projected losses. Options include, but are not limited to:\n\n* **Pricing Adjustment:** Explore a potential APY reduction to improve NIM.\n* **Cost Optimization:** Analyze our funding sources to identify potential cost-saving opportunities.\n* **Strategic Partnerships:** Evaluate opportunities to reduce operating costs through strategic partnerships.\n* **Product Differentiation:**  Explore offering additional value-added services to attract and retain customers.\n\nFailure to address these projections will result in continued and escalating losses in the HYSA product line.  A comprehensive strategic review is critical to ensure the long-term viability and profitability of this offering."
 }

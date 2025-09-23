@@ -56,51 +56,72 @@ export default function ProfitabilityForecastResults() {
 
   // Scenario table extraction (if present)
   let scenarioTable: any[][] = [];
-  if (data.forecast && data.forecast.base) {
+  let scenarios: any[] = [];
+  if (data.forecast && data.forecast.federal_rate && data.forecast.amex) {
     scenarioTable.push([
       "Scenario", "3mo Bal", "3mo NIM", "3mo Profit", "6mo Bal", "6mo NIM", "6mo Profit", "12mo Bal", "12mo NIM", "12mo Profit"
     ]);
+    const balances = data.forecast.federal_rate.balances;
+    // Federal Rate scenario
     scenarioTable.push([
-      "Base",
-      data.forecast.base.balances[0], data.forecast.base.nim[0], data.forecast.base.profit[0],
-      data.forecast.base.balances[1], data.forecast.base.nim[1], data.forecast.base.profit[1],
-      data.forecast.base.balances[2], data.forecast.base.nim[2], data.forecast.base.profit[2]
+      "Federal Rate",
+      balances[0], data.forecast.federal_rate.nim[0], data.forecast.federal_rate.profit[0],
+      balances[1], data.forecast.federal_rate.nim[1], data.forecast.federal_rate.profit[1],
+      balances[2], data.forecast.federal_rate.nim[2], data.forecast.federal_rate.profit[2]
     ]);
-    // Add more scenarios if present
-    for (const key of Object.keys(data.forecast)) {
-      if (key === "base") continue;
-      const s = data.forecast[key];
-      if (s && s.balances && s.nim && s.profit) {
-        scenarioTable.push([
-          key.charAt(0).toUpperCase() + key.slice(1),
-          s.balances[0], s.nim[0], s.profit[0],
-          s.balances[1], s.nim[1], s.profit[1],
-          s.balances[2], s.nim[2], s.profit[2]
-        ]);
-      }
-    }
+    // American Express scenario
+    scenarioTable.push([
+      "American Express",
+      balances[0], data.forecast.amex.nim[0], data.forecast.amex.profit[0],
+      balances[1], data.forecast.amex.nim[1], data.forecast.amex.profit[1],
+      balances[2], data.forecast.amex.nim[2], data.forecast.amex.profit[2]
+    ]);
+    scenarios = [
+      { label: "Federal Rate", ...data.forecast.federal_rate },
+      { label: "American Express", ...data.forecast.amex }
+    ];
   }
 
-  // Prepare chart data if available
+  // Prepare chart data for both scenarios
   let chartData = null;
-  if (data.forecast && data.forecast.base) {
-    const months = data.forecast.base.months || [3, 6, 12];
+  let chartHasData = false;
+  if (scenarios.length === 2) {
+    const months = scenarios[0].months.map((m: number) => `${m} mo`);
+    chartHasData = scenarios.some(s => s.profit.some((v: any) => v !== null && v !== 0));
     chartData = {
-      labels: months.map((m: number) => `${m} mo`),
+      labels: months,
       datasets: [
         {
-          label: "Profit ($)",
-          data: data.forecast.base.profit,
+          label: "Profit ($) - Federal Rate",
+          data: scenarios[0].profit,
           borderColor: "#006FCF",
           backgroundColor: "rgba(0,111,207,0.2)",
           tension: 0.3,
           fill: true,
         },
         {
-          label: "NIM (%)",
-          data: data.forecast.base.nim,
+          label: "Profit ($) - American Express",
+          data: scenarios[1].profit,
           borderColor: "#F59E42",
           backgroundColor: "rgba(245,158,66,0.1)",
+          tension: 0.3,
+          fill: true,
+        },
+        {
+          label: "NIM (%) - Federal Rate",
+          data: scenarios[0].nim,
+          borderColor: "#006FCF",
+          borderDash: [6, 4],
+          backgroundColor: "rgba(0,111,207,0.05)",
+          yAxisID: 'y1',
+          tension: 0.3,
+        },
+        {
+          label: "NIM (%) - American Express",
+          data: scenarios[1].nim,
+          borderColor: "#F59E42",
+          borderDash: [6, 4],
+          backgroundColor: "rgba(245,158,66,0.05)",
           yAxisID: 'y1',
           tension: 0.3,
         },
@@ -111,12 +132,7 @@ export default function ProfitabilityForecastResults() {
   return (
     <section className="mt-16" id="profitability-forecast-results">
       <h2 className="text-2xl font-bold mb-4">Profitability Forecast Results</h2>
-      <div className="mb-6">
-        <pre className="bg-slate-900 text-slate-100 p-4 rounded overflow-x-auto text-xs">
-          {JSON.stringify(data, null, 2)}
-        </pre>
-      </div>
-      {chartData && (
+      {chartData && chartHasData ? (
         <div className="mb-8">
           <h3 className="text-xl font-semibold mb-2">Forecast Line Chart</h3>
           <Line
@@ -139,16 +155,18 @@ export default function ProfitabilityForecastResults() {
             height={300}
           />
         </div>
+      ) : (
+        <div className="mb-8 text-amex-blue">No forecast data available for chart.</div>
       )}
       {data.summary && (
         <div className="mb-6">
           <h3 className="text-xl font-semibold mb-2">Executive Summary</h3>
-          <pre className="bg-slate-900 text-slate-100 p-4 rounded overflow-x-auto text-sm whitespace-pre-wrap">
+          <div className="bg-slate-900 text-slate-100 p-4 rounded overflow-x-auto text-sm whitespace-pre-wrap prose prose-invert">
             {data.summary}
-          </pre>
+          </div>
         </div>
       )}
-      {scenarioTable.length > 1 && (
+      {scenarioTable.length > 1 ? (
         <div className="mb-6">
           <h3 className="text-xl font-semibold mb-2">Scenario Comparison Table</h3>
           <div className="overflow-x-auto">
@@ -172,6 +190,8 @@ export default function ProfitabilityForecastResults() {
             </table>
           </div>
         </div>
+      ) : (
+        <div className="mb-6 text-amex-blue">No scenario data available.</div>
       )}
     </section>
   );
