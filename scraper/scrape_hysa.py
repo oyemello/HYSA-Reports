@@ -563,6 +563,8 @@ def resolve_bank_link_by_search(institution: str, client: Firecrawl) -> Optional
 
 
 def fact_check_accounts(records: List[AccountRecord], gemini_key: Optional[str]) -> None:
+    import concurrent.futures
+    import time
     if not gemini_key:
         for record in records:
             record.double_check = None
@@ -574,9 +576,8 @@ def fact_check_accounts(records: List[AccountRecord], gemini_key: Optional[str])
     configure(api_key=gemini_key)
     model = GenerativeModel("gemini-1.5-flash")
 
-    for record in records:
+    def check_record(record: AccountRecord, idx: int, total: int):
         existing_note = record.fact_check_notes
-        # Prefer the resolved bank link for verification; fall back to nerdwallet link
         chosen_link = record.bank_link or record.nerdwallet_link or "(no link provided)"
         prompt = FACT_CHECK_PROMPT_TEMPLATE.format(
             institution=record.institution,
@@ -584,29 +585,40 @@ def fact_check_accounts(records: List[AccountRecord], gemini_key: Optional[str])
             link=chosen_link,
         )
         try:
-            response = model.generate_content(prompt)
+            print(f"[Gemini] Fact-checking {idx+1}/{total}: {record.institution} ({record.apy}) ...", flush=True)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(lambda: model.generate_content(prompt))
+                response = future.result(timeout=30)
             text = (response.text or "").strip()
-        except Exception as exc:  # pragma: no cover - defensive logging path
-            record.double_check = False
-            message = f"Gemini error: {exc}"
+        except concurrent.futures.TimeoutError:
+            record.double_check = None
+            message = "Gemini timeout: took >30s"
+            print(f"[Gemini] Timeout for {record.institution}")
             record.fact_check_notes = (
                 (existing_note + " | " + message).strip(" |")
                 if existing_note
                 else message
             )
-            continue
-
+            return
+        except Exception as exc:
+            record.double_check = False
+            message = f"Gemini error: {exc}"
+            print(f"[Gemini] Error for {record.institution}: {exc}")
+            record.fact_check_notes = (
+                (existing_note + " | " + message).strip(" |")
+                if existing_note
+                else message
+            )
+            return
         label, _, note = text.partition(":")
         label = label.strip().upper()
         note = note.strip() if note else ""
-
         if label == "VERIFIED":
             record.double_check = True
         elif label == "REJECTED":
             record.double_check = False
         else:
             record.double_check = None
-
         message = note or text
         if message:
             record.fact_check_notes = (
@@ -616,6 +628,11 @@ def fact_check_accounts(records: List[AccountRecord], gemini_key: Optional[str])
             )
         else:
             record.fact_check_notes = existing_note
+
+    total = len(records)
+    for idx, record in enumerate(records):
+        check_record(record, idx, total)
+        time.sleep(0.5)  # slight delay to avoid hammering API
 
 
 def save_records(records: List[AccountRecord], path: Optional[str] = None) -> None:
