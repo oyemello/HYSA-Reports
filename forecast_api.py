@@ -10,8 +10,6 @@ import json
 from datetime import datetime
 from typing import List, Dict, Any
 import requests
-from fastapi import FastAPI
-from pydantic import BaseModel
 
 FRED_API_KEY = os.getenv("FRED_API_KEY")
 FRED_SERIES = [
@@ -19,17 +17,6 @@ FRED_SERIES = [
 ]
 FRED_BASE = "https://api.stlouisfed.org/fred/series/observations"
 
-app = FastAPI()
-
-class APYRecord(BaseModel):
-    institution: str
-    apy: float
-
-class ForecastRequest(BaseModel):
-    institution_apy: float
-    competitor_apy: List[APYRecord]
-
-@app.get("/api/forecast")
 def get_forecast():
     # 1. Fetch FRED data
     fred_data = {}
