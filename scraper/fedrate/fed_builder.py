@@ -86,9 +86,13 @@ def build_html():
     function ds(label, arr, color, hidden=false) {
       return {
         label, hidden,
-        data: arr.map(p => ({ x: p.date, y: p.value })),
-        borderColor: color, backgroundColor: color,
-        borderWidth: 2, pointRadius: 0, tension: 0.15
+        data: arr,
+        borderColor: color,
+        backgroundColor: color,
+        borderWidth: 2,
+        pointRadius: 0,
+        tension: 0.15,
+        parsing: false
       };
     }
 
